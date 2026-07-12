@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JB ForcePlate</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>JB ForcePlate</h1>
+    <input id="endpoint" value="http://192.168.4.1/trace.csv">
+    <button id="loadEndpoint">Load FP</button>
+    <label class="fileButton">
+      Load CSV
+      <input id="fileInput" type="file" accept=".csv,text/csv" multiple>
+    </label>
+    <button id="exportCsv" type="button">Export CSV</button>
+    <button id="resetView" type="button">Reset</button>
+    <span id="status">Ready</span>
+  </header>
+
+  <nav class="appTabs" role="tablist" aria-label="ForcePlate workspace">
+    <button id="appTabMeasure" class="active" type="button">Measure</button>
+    <button id="appTabAnalyze" type="button">Analyze</button>
+    <button id="appTabResults" type="button">Results</button>
+  </nav>
+
+  <main>
+    <section id="measureView" class="appView measureView active">
+      <section id="sessionMeasurePanel" class="sessionMeasurePanel active">
+        <div class="sessionPreviewGrid">
+          <section class="sessionPreviewPanel">
+            <div class="panelHeader">
+              <h2>Measurement Preview</h2>
+              <div class="realtimeTools" aria-label="Preview view controls">
+                <button id="sessionPreviewFitAll" type="button" title="Fit all" aria-label="Fit all">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path>
+                  </svg>
+                </button>
+                <button id="sessionPreviewFitJump" type="button" title="Focus jump" aria-label="Focus jump">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 12h4l2-6 4 12 2-6h4"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <canvas id="sessionPreviewChart"></canvas>
+          </section>
+        </div>
+        <div id="measureSplitterCurrent" class="measureSplitter horizontal" role="separator" aria-orientation="horizontal"></div>
+        <section id="sessionStats" class="sessionStats">
+          <div class="panelHeader">
+            <h2>Current Measurement</h2>
+          </div>
+        </section>
+      </section>
+
+      <section id="realtimePanel" class="realtimePanel">
+        <div class="panelHeader">
+          <h2>Realtime Data</h2>
+          <div class="realtimeTools" aria-label="Realtime view controls">
+            <button id="realtimePlay" type="button" title="Play CSV simulation" aria-label="Play CSV simulation">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 5v14l11-7z"></path>
+              </svg>
+            </button>
+            <button id="realtimeFitVertical" type="button" title="Fit vertical" aria-label="Fit vertical">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"></path>
+              </svg>
+            </button>
+            <button id="realtimeReset" type="button" title="Reset realtime" aria-label="Reset realtime">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4v6h6M20 20v-6h-6"></path>
+                <path d="M20 9a8 8 0 0 0-13.7-3.7L4 7.5M4 15a8 8 0 0 0 13.7 3.7L20 16.5"></path>
+              </svg>
+            </button>
+            <button id="realtimeLive" class="active" type="button" title="Return to live" aria-label="Return to live">LIVE</button>
+          </div>
+        </div>
+        <canvas id="realtimeChart"></canvas>
+        <div class="realtimeScrub">
+          <input id="realtimeScrub" type="range" min="0" max="0" step="1" value="0">
+        </div>
+      </section>
+
+      <div id="measureSplitterMain" class="measureSplitter" role="separator" aria-orientation="vertical"></div>
+      <section id="sessionLeaderboardPanel" class="sessionLeaderboardPanel active">
+        <div class="panelHeader">
+          <h2>Session Leaderboard</h2>
+        </div>
+        <div id="sessionLeaderboard" class="sessionLeaderboard"></div>
+      </section>
+      <div id="measureSplitterControls" class="measureSplitter" role="separator" aria-orientation="vertical"></div>
+
+      <aside class="sessionPanel">
+        <div class="measureUtilityBar">
+          <div class="sessionRow sessionApiRow">
+            <label class="fieldGrow">
+              Librarian API
+              <input id="librarianApi" type="text" value="http://100.77.57.39:8787">
+            </label>
+            <button id="syncRoster" type="button">Sync</button>
+          </div>
+          <div class="cacheStatusRow">
+            <div id="cacheStatus" class="cacheStatus">Local cache: checking...</div>
+            <button id="clearSessionCache" type="button">Clear</button>
+          </div>
+        </div>
+        <div class="sideTabs" role="tablist" aria-label="Measure panel mode">
+          <button id="measurePanelTabSession" class="active" type="button">Session</button>
+          <button id="measurePanelTabRealtime" type="button">Realtime</button>
+        </div>
+        <div class="sessionCompact">
+          <div id="sessionPane" class="sidePane active">
+            <div class="sessionTitleRow">
+              <label class="fieldGrow">
+                Session
+                <input id="sessionName" type="text" value="ForcePlate Session">
+              </label>
+              <div id="sessionState" class="sessionState">Idle</div>
+            </div>
+            <div class="sessionButtonRow">
+              <button id="sessionBegin" type="button">Begin</button>
+              <button id="sessionStop" type="button">Stop</button>
+              <button id="sessionDiscard" type="button">Discard</button>
+            </div>
+            <div id="rosterStatus" class="rosterStatus">Roster not loaded</div>
+            <div class="sessionRow">
+              <label>
+                Athlete
+                <select id="sessionAthlete"></select>
+              </label>
+              <label>
+                Group
+                <select id="sessionCategory"></select>
+              </label>
+            </div>
+            <div class="sessionRow">
+              <label>
+                Discipline
+                <select id="measureDiscipline">
+                  <option value="squat_jump">Squat Jump</option>
+                  <option value="countermovement_jump">Countermovement Jump</option>
+                  <option value="drop_jump">Drop Jump</option>
+                  <option value="balance">Balance</option>
+                  <option value="max_force">Max Force</option>
+                </select>
+              </label>
+              <label id="measureBoxSetting">
+                Box
+                <span>
+                  <input id="measureBoxHeightCm" type="number" min="0" max="100" step="0.5" value="26">
+                  cm
+                </span>
+              </label>
+            </div>
+            <div class="sessionRow">
+              <label>
+                Trace
+                <span>
+                  <input id="measureTraceWindowMs" type="number" min="1000" max="30000" step="250" value="6000">
+                  ms
+                </span>
+              </label>
+              <label id="measureWeighingSetting">
+                Weighing
+                <span>
+                  <input id="measureWeighingMs" type="number" min="500" max="10000" step="250" value="3500">
+                  ms
+                </span>
+              </label>
+            </div>
+            <div class="measurementActions">
+              <button id="measurementStart" type="button">START</button>
+              <button id="measurementStop" type="button">STOP</button>
+            </div>
+          </div>
+
+          <div id="realtimePane" class="sidePane">
+            <h3>Settings</h3>
+            <div class="realtimeControls">
+              <label>
+                Speed
+                <input id="realtimeSpeed" type="range" min="60" max="420" step="20" value="160">
+              </label>
+              <label class="checkboxControl">
+                <input id="realtimeAutoY" type="checkbox" checked>
+                Auto vertical
+              </label>
+            </div>
+            <label>
+              Slave stream
+              <input id="slaveEndpoint" type="text" value="http://192.168.4.2/local_realtime.csv">
+            </label>
+            <label>
+              Poll
+              <span>
+                <input id="realtimeIntervalMs" type="number" min="1" max="1000" step="1" value="1">
+                ms
+              </span>
+            </label>
+            <label>
+              Realtime rate
+              <select id="realtimeSampleRate">
+                <option value="4" selected>250 Hz</option>
+                <option value="2">500 Hz</option>
+              </select>
+            </label>
+            <label class="checkboxControl">
+              <input id="realtimeRenderBuffer" type="checkbox" checked>
+              Render buffer
+            </label>
+            <label>
+              Lag
+              <span>
+                <input id="realtimeRenderLagMs" type="number" min="0" max="1000" step="5" value="20">
+                ms
+              </span>
+            </label>
+            <label>
+              Wait
+              <span>
+                <input id="realtimeWarmupMs" type="number" min="0" max="30000" step="500" value="6000">
+                ms
+              </span>
+            </label>
+            <div class="sessionDivider"></div>
+            <h3>Measuring</h3>
+            <div class="sessionRow">
+              <label>
+                Athlete
+                <select id="realtimeAthlete"></select>
+              </label>
+              <label>
+                Group
+                <select id="realtimeCategory"></select>
+              </label>
+            </div>
+            <label>
+              Discipline
+              <select id="realtimeDiscipline">
+                <option value="squat_jump">Squat Jump</option>
+                <option value="countermovement_jump">Countermovement Jump</option>
+                <option value="drop_jump">Drop Jump</option>
+                <option value="balance">Balance</option>
+                <option value="max_force">Max Force</option>
+              </select>
+            </label>
+            <div class="realtimeActions">
+              <button id="realtimeStart" type="button">START</button>
+              <button id="realtimeStop" type="button">STOP</button>
+            </div>
+            <div class="realtimeSegmentList" id="realtimeSegmentList">
+              No detected jumps
+            </div>
+            <button id="realtimeExportSelected" type="button">Export selected</button>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="analyzeView" class="appView analyzeView">
+      <section class="toolbar analyzeToolbar" aria-label="Analysis controls">
+        <div class="analyzeTraceGroup">
+          <div class="curveTabs" role="tablist" aria-label="Curve view">
+            <button id="viewTotal" class="active" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 16c2.4 0 2.4-8 4.8-8s2.4 8 4.8 8 2.4-8 4.8-8S20.8 16 21 16"></path>
+              </svg>
+              <span>TOTAL</span>
+            </button>
+            <button id="viewLeft" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 16c2.4 0 2.4-8 4.8-8s2.4 8 4.8 8 2.4-8 4.8-8S20.8 16 21 16"></path>
+              </svg>
+              <span>LEFT</span>
+            </button>
+            <button id="viewRight" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 16c2.4 0 2.4-8 4.8-8s2.4 8 4.8 8 2.4-8 4.8-8S20.8 16 21 16"></path>
+              </svg>
+              <span>RIGHT</span>
+            </button>
+          </div>
+          <div id="forceToggle" class="forceToggle net" aria-label="Force mode">
+            <button id="modeNet" class="active" type="button">NET</button>
+            <button id="modeAbs" type="button">ABS</button>
+          </div>
+          <div class="overlayToggles" aria-label="Derived curve overlays">
+            <button id="overlayVelocity" type="button">VEL</button>
+            <button id="overlayPower" type="button">PWR</button>
+            <button id="overlayPowerMode" type="button" title="Power mode">PROP</button>
+            <button id="overlayDisplacement" type="button">DISP</button>
+            <button id="overlayAsymmetry" type="button">ASYM</button>
+            <button id="overlayBodyweight" type="button">xBW</button>
+          </div>
+        </div>
+
+        <div class="analyzeActionGroup">
+          <select id="disciplineSelect" class="analyzeDisciplineField" aria-hidden="true" tabindex="-1">
+            <option value="squat_jump">Squat Jump</option>
+            <option value="countermovement_jump">Countermovement Jump</option>
+            <option value="vertical_jump">Vertical Jump (legacy)</option>
+            <option value="drop_jump">Drop Jump</option>
+            <option value="balance">Balance</option>
+            <option value="max_force">Max Force</option>
+          </select>
+          <button id="detectAll">Detect landmarks</button>
+          <button id="clearAdjusted">Clear adjusted</button>
+          <button id="metricsFw" class="active">FW metrics</button>
+          <button id="metricsAdjusted">Adjusted metrics</button>
+        </div>
+      </section>
+
+      <section class="workbench">
+        <section class="analyzeMainPanel">
+          <section id="chartPanel" class="chartPanel">
+            <div class="chartTools" aria-label="Chart fit controls">
+              <button id="fitHorizontal" type="button" title="Fit horizontal" aria-label="Fit horizontal">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"></path>
+                </svg>
+              </button>
+              <button id="fitVertical" type="button" title="Fit vertical" aria-label="Fit vertical">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"></path>
+                </svg>
+              </button>
+              <button id="fitAll" type="button" title="Fit all" aria-label="Fit all">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"></path>
+                  <path d="M4 4l6 6M20 4l-6 6M4 20l6-6M20 20l-6-6"></path>
+                </svg>
+              </button>
+              <button id="fitJump" type="button" title="Focus jump" aria-label="Focus jump">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 18c4 0 4-12 8-12s4 12 8 12"></path>
+                  <path d="M6 18h12"></path>
+                </svg>
+              </button>
+            </div>
+            <canvas id="chart"></canvas>
+          </section>
+          <section id="metrics" class="metrics"></section>
+        </section>
+
+        <aside class="settingsPanel">
+          <div class="settingsTabs" role="tablist" aria-label="Side panel">
+            <button id="settingsTabTraces" class="active" type="button" aria-label="Session library" title="Session library">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 3h7l5 5v13H7z"></path>
+                <path d="M14 3v5h5M10 13h6M10 17h6"></path>
+              </svg>
+            </button>
+            <button id="settingsTabLandmarks" type="button" aria-label="Landmark settings" title="Landmark settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v18M3 12h18M6 6l12 12M18 6 6 18"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <div id="traceLibraryPane">
+            <h2>Session library</h2>
+            <button id="loadSessionLibrary" class="libraryLoadButton" type="button">Load Session</button>
+    <input id="sessionLibraryFileInput" type="file" accept=".jbbin,.json,.jbfpbin,application/json,application/octet-stream" multiple hidden>
+            <button id="clearTraceLibrary" type="button">Clear list</button>
+            <div id="traceLibraryList" class="traceLibraryList"></div>
+          </div>
+          <div id="landmarkSettingsPane" class="hidden">
+            <h2>Landmark settings</h2>
+            <div class="presetControls">
+              <label>
+                Preset
+                <select id="settingsPreset"></select>
+              </label>
+              <label>
+                Name
+                <input id="presetName" type="text" placeholder="My preset">
+              </label>
+              <button id="savePreset">Save preset</button>
+            </div>
+            <div class="settingsGroupTitle">Protocol</div>
+            <label>
+              Box height
+              <span>
+                <input id="boxHeightCm" type="number" min="0" max="100" step="0.5" value="26">
+                cm
+              </span>
+            </label>
+            <div class="settingsGroupTitle">Flight time range</div>
+            <label>
+              Contact threshold
+              <span>
+                <input id="contactThreshold" type="number" min="1" max="500" step="1" value="50">
+                N
+              </span>
+            </label>
+            <label>
+              Sustain window
+              <span>
+                <input id="sustainMs" type="number" min="4" max="120" step="4" value="20">
+                ms
+              </span>
+            </label>
+            <label>
+              Min flight
+              <span>
+                <input id="minFlightMs" type="number" min="40" max="400" step="4" value="80">
+                ms
+              </span>
+            </label>
+            <div class="settingsGroupTitle">Movement start</div>
+            <label>
+              Onset search
+              <span>
+                <input id="onsetSearchMs" type="number" min="80" max="800" step="20" value="450">
+                ms
+              </span>
+            </label>
+            <label>
+              Onset slope
+              <span>
+                <input id="onsetSlopeN" type="number" min="1" max="120" step="1" value="8">
+                N
+              </span>
+            </label>
+            <label>
+              Onset sustain
+              <span>
+                <input id="onsetSustainMs" type="number" min="20" max="240" step="4" value="80">
+                ms
+              </span>
+            </label>
+          </div>
+        </aside>
+      </section>
+
+      <details class="debugPanel">
+        <summary>Landmark debug</summary>
+        <section id="landmarkDebug" class="landmarkDebug"></section>
+      </details>
+    </section>
+
+    <section id="resultsView" class="appView resultsView">
+      <section class="resultsPanel">
+        <div class="resultsToolbar">
+          <label>
+            Session
+            <select id="resultsSessionSelect"></select>
+          </label>
+          <button id="resultsPickFolder" type="button">Load Results Folder</button>
+          <button id="resultsRefresh" type="button">Refresh</button>
+          <input id="resultsFolderInput" type="file" accept=".jbbin,.json,application/json,application/octet-stream" webkitdirectory multiple hidden>
+        </div>
+        <div id="resultsSummary" class="resultsSummary"></div>
+        <div id="resultsList" class="resultsList"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="traceEngine.js"></script>
+  <script src="forceplate-models.js"></script>
+  <script src="session-store.js"></script>
+  <script src="session-archive.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

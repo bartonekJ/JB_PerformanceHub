@@ -1,0 +1,4 @@
+﻿Data/Results/*
+!Data/Results/.gitkeep
+*.tmp
+.DS_Store
