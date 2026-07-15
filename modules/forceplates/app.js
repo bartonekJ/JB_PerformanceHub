@@ -34,6 +34,9 @@ const state = {
     cursorMs: NaN,
     trailMs: 2000,
     fadeMs: 1000,
+    heatmapMode: 'off',
+    heatmapCacheKey: '',
+    heatmapCanvas: null,
     lastFrameMs: 0,
     raf: 0,
     tapEventCacheKey: '',
@@ -440,6 +443,7 @@ const DefaultSettingsPreset = {
   overlayBodyweight: document.getElementById('overlayBodyweight'),
   balancePlaybackControls: document.getElementById('balancePlaybackControls'),
   balancePlay: document.getElementById('balancePlay'),
+  balanceHeatmap: document.getElementById('balanceHeatmap'),
   balanceTrailMs: document.getElementById('balanceTrailMs'),
   balanceTrailValue: document.getElementById('balanceTrailValue'),
   balanceFadeMs: document.getElementById('balanceFadeMs'),
@@ -2770,6 +2774,8 @@ function resetBalanceAnalyzePlayback({ resetView = false } = {}) {
   playback.engaged = false;
   playback.tapEventCacheKey = '';
   playback.tapEvents = [];
+  playback.heatmapCacheKey = '';
+  playback.heatmapCanvas = null;
   if (resetView) {
     playback.view = { fitMode: 'all', zoom: 1, panX: 0, panY: 0 };
   }
@@ -2795,6 +2801,32 @@ function syncBalanceAnalyzeControls() {
   controls.balancePlay.textContent = playback.playing ? '❚❚ PAUSE' : '▶ PLAY';
   controls.balancePlay.classList.toggle('active', playback.playing);
   controls.balancePlay.disabled = durationMs <= 0;
+  const heatmapModes = balanceAvailableHeatmapModes();
+  if (!heatmapModes.includes(playback.heatmapMode)) playback.heatmapMode = 'off';
+  const heatmapActive = playback.heatmapMode !== 'off';
+  const heatmapSuffix = playback.heatmapMode === 'open' ? 'EO'
+    : playback.heatmapMode === 'closed' ? 'EC' : 'OFF';
+  controls.balanceHeatmap.textContent = `HEATMAP: ${heatmapSuffix}`;
+  controls.balanceHeatmap.title = heatmapActive
+    ? `Showing ${heatmapSuffix} COP dwell density · click for next view`
+    : 'Show COP dwell heatmap';
+  controls.balanceHeatmap.classList.toggle('active', heatmapActive);
+  controls.balanceHeatmap.setAttribute('aria-pressed', heatmapActive ? 'true' : 'false');
+  controls.balanceHeatmap.disabled = durationMs <= 0;
+}
+
+function balanceAvailableHeatmapModes() {
+  const hasOpen = state.rows.some((row) =>
+    finite(Number(row.eo_cop_x_mm)) && finite(Number(row.eo_cop_y_mm)));
+  const hasClosed = state.rows.some((row) =>
+    finite(Number(row.ec_cop_x_mm)) && finite(Number(row.ec_cop_y_mm)));
+  if (hasOpen || hasClosed) {
+    return ['off', ...(hasOpen ? ['open'] : []), ...(hasClosed ? ['closed'] : [])];
+  }
+  const result = state.analyzeResult?.result || null;
+  const settings = result?.disciplineSettings || result?.disciplineDefinition?.settings || {};
+  const mode = normalizeBalanceVisionMode(settings.visionMode);
+  return ['off', mode === 'open' ? 'open' : 'closed'];
 }
 
 function balanceAnalyzePlaybackFrame(frameMs) {
@@ -4798,12 +4830,15 @@ function drawSecondLegTapRipple(context, rect, eventTMs, cursorTMs, ratio) {
   const alpha = (1 - progress) ** 1.35;
   const centerX = (rect.x + rect.w / 2) * ratio;
   const centerY = (rect.y + rect.h / 2) * ratio;
-  const radius = (7 + progress * 31) * ratio;
+  // Keep the effect in plate space so it follows Balance zoom exactly.
+  // At the end of its lifetime the ring radius equals one plate width.
+  const maxRadius = rect.w;
+  const radius = maxRadius * (0.08 + progress * 0.92) * ratio;
 
   context.save();
   context.fillStyle = `rgba(240,42,20,${(0.38 * alpha).toFixed(3)})`;
   context.beginPath();
-  context.arc(centerX, centerY, Math.max(2, (5 - progress * 2) * ratio), 0, Math.PI * 2);
+  context.arc(centerX, centerY, Math.max(3, (8 - progress * 3) * ratio), 0, Math.PI * 2);
   context.fill();
   context.strokeStyle = `rgba(240,42,20,${(0.72 * alpha).toFixed(3)})`;
   context.lineWidth = Math.max(1, 1.8 * ratio);
@@ -7698,6 +7733,227 @@ function drawBalanceAnalyzeSecondLegTapRipples(layout, settings, playback, motio
     });
 }
 
+function balanceHeatmapDomain(layout, settings) {
+  if (settings.legMode === 'single') {
+    const plateIndex = settings.activeSide === 'right' ? 1 : 0;
+    return {
+      xMin: -layout.plateWidthMm / 2,
+      xMax: layout.plateWidthMm / 2,
+      yMin: -layout.plateHeightMm / 2,
+      yMax: layout.plateHeightMm / 2,
+      rect: layout.rects[plateIndex],
+    };
+  }
+  const totalWidthMm = layout.plateWidthMm * 2 + layout.gapMm;
+  return {
+    xMin: -totalWidthMm / 2,
+    xMax: totalWidthMm / 2,
+    yMin: -layout.plateHeightMm / 2,
+    yMax: layout.plateHeightMm / 2,
+    rect: {
+      x: layout.groupLeft,
+      y: layout.groupTop,
+      w: layout.groupWidth,
+      h: layout.groupHeight,
+    },
+  };
+}
+
+function blurBalanceDensity(input, width, height) {
+  const radius = 5;
+  const sigma = 2.15;
+  const kernel = [];
+  let kernelSum = 0;
+  for (let offset = -radius; offset <= radius; offset++) {
+    const value = Math.exp(-(offset * offset) / (2 * sigma * sigma));
+    kernel.push(value);
+    kernelSum += value;
+  }
+  for (let index = 0; index < kernel.length; index++) kernel[index] /= kernelSum;
+
+  const horizontal = new Float32Array(input.length);
+  const output = new Float32Array(input.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let offset = -radius; offset <= radius; offset++) {
+        const sourceX = clamp(x + offset, 0, width - 1);
+        sum += input[y * width + sourceX] * kernel[offset + radius];
+      }
+      horizontal[y * width + x] = sum;
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let offset = -radius; offset <= radius; offset++) {
+        const sourceY = clamp(y + offset, 0, height - 1);
+        sum += horizontal[sourceY * width + x] * kernel[offset + radius];
+      }
+      output[y * width + x] = sum;
+    }
+  }
+  return output;
+}
+
+function buildBalanceDensityGrid(series, domain, cursorMs) {
+  const widthMm = domain.xMax - domain.xMin;
+  const heightMm = domain.yMax - domain.yMin;
+  // A 1.5 mm density cell keeps local dwell structure visible instead of
+  // enlarging each coarse cell into a soft square when the plate is zoomed.
+  const cellMm = 1.5;
+  const width = Math.max(64, Math.ceil(widthMm / cellMm));
+  const height = Math.max(100, Math.ceil(heightMm / cellMm));
+  const density = new Float32Array(width * height);
+  series.rows.forEach((row) => {
+    if (Number(row.t_ms) > cursorMs) return;
+    const xMm = Number(row[series.xKey]);
+    const yMm = Number(row[series.yKey]);
+    if (!finite(xMm) || !finite(yMm) ||
+        xMm < domain.xMin || xMm > domain.xMax ||
+        yMm < domain.yMin || yMm > domain.yMax) return;
+    const x = clamp(Math.round((xMm - domain.xMin) / widthMm * (width - 1)), 0, width - 1);
+    const y = clamp(Math.round((domain.yMax - yMm) / heightMm * (height - 1)), 0, height - 1);
+    density[y * width + x] += 1;
+  });
+  return { width, height, values: blurBalanceDensity(density, width, height) };
+}
+
+function balanceDensityPercentile(grids, peak, quantile) {
+  if (!(peak > 0)) return 0;
+  const bins = 512;
+  const histogram = new Uint32Array(bins);
+  const floor = peak * 0.0005;
+  let count = 0;
+  grids.forEach((grid) => grid.values.forEach((value) => {
+    if (!(value > floor)) return;
+    const bin = clamp(Math.floor(value / peak * (bins - 1)), 0, bins - 1);
+    histogram[bin] += 1;
+    count += 1;
+  }));
+  if (!count) return 0;
+  const target = Math.max(1, Math.ceil(count * clamp(quantile, 0, 1)));
+  let accumulated = 0;
+  for (let index = 0; index < bins; index++) {
+    accumulated += histogram[index];
+    if (accumulated >= target) return peak * index / (bins - 1);
+  }
+  return peak;
+}
+
+function balanceHeatmapColor(stops, strength) {
+  const value = clamp(strength, 0, 1);
+  for (let index = 1; index < stops.length; index++) {
+    const previous = stops[index - 1];
+    const next = stops[index];
+    if (value > next[0]) continue;
+    const mix = clamp((value - previous[0]) / Math.max(0.0001, next[0] - previous[0]), 0, 1);
+    return [
+      previous[1] + (next[1] - previous[1]) * mix,
+      previous[2] + (next[2] - previous[2]) * mix,
+      previous[3] + (next[3] - previous[3]) * mix,
+    ];
+  }
+  return stops.at(-1).slice(1);
+}
+
+function balanceHeatmapCanvas(series, domain, cursorMs, settings) {
+  const playback = state.balanceAnalyze;
+  const cursorBucketMs = Math.min(
+    balanceAnalyzeDurationMs(),
+    Math.max(0, Math.floor(cursorMs / 100) * 100),
+  );
+  const key = [
+    state.activeResultId || state.source,
+    state.rows.length,
+    state.rows.at(-1)?.t_ms || 0,
+    settings.legMode,
+    settings.activeSide,
+    normalizeBalanceVisionMode(settings.visionMode),
+    playback.heatmapMode,
+    cursorBucketMs,
+  ].join(':');
+  if (playback.heatmapCacheKey === key && playback.heatmapCanvas) {
+    return playback.heatmapCanvas;
+  }
+
+  const requestedLabel = playback.heatmapMode === 'open' ? 'EO' : 'EC';
+  const selectedSeries = series.find((item) => item.label === requestedLabel);
+  if (!selectedSeries) return null;
+  const grids = [buildBalanceDensityGrid(selectedSeries, domain, cursorBucketMs)];
+  const width = grids[0].width;
+  const height = grids[0].height;
+  let peak = 0;
+  grids.forEach((grid) => grid.values.forEach((value) => { peak = Math.max(peak, value); }));
+
+  // Each condition owns its scale. A logarithmic response preserves sparse
+  // visited areas while the upper percentile still gives the hottest dwell
+  // region a stable red endpoint.
+  const densityHigh = Math.max(0.0001, balanceDensityPercentile(grids, peak, 0.995));
+  const densityPivot = Math.max(0.000001, densityHigh * 0.012);
+  const normalizeDensity = (value) => {
+    if (!(value > 0)) return 0;
+    return clamp(
+      Math.log1p(value / densityPivot) / Math.log1p(densityHigh / densityPivot),
+      0,
+      1,
+    );
+  };
+
+  const temperatureStops = [
+    [0.00, 18, 30, 92],
+    [0.16, 0, 92, 230],
+    [0.33, 0, 205, 246],
+    [0.50, 42, 214, 87],
+    [0.68, 232, 239, 50],
+    [0.84, 255, 133, 0],
+    [1.00, 240, 42, 20],
+  ];
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const heatCtx = canvas.getContext('2d');
+  const image = heatCtx.createImageData(width, height);
+  for (let index = 0; index < width * height; index++) {
+    const value = grids[0].values[index];
+    const strength = normalizeDensity(value);
+    if (strength <= 0) continue;
+    const [red, green, blue] = balanceHeatmapColor(temperatureStops, strength);
+    const offset = index * 4;
+    image.data[offset] = Math.round(red);
+    image.data[offset + 1] = Math.round(green);
+    image.data[offset + 2] = Math.round(blue);
+    image.data[offset + 3] = Math.round(28 + Math.pow(strength, 0.7) * 205);
+  }
+  heatCtx.putImageData(image, 0, 0);
+  playback.heatmapCacheKey = key;
+  playback.heatmapCanvas = canvas;
+  return canvas;
+}
+
+function drawBalanceAnalyzeHeatmap(layout, settings, series, playback, motionMode, ratio) {
+  if (playback.heatmapMode === 'off') return;
+  const domain = balanceHeatmapDomain(layout, settings);
+  const cursorMs = motionMode ? playback.cursorMs : balanceAnalyzeDurationMs();
+  const canvas = balanceHeatmapCanvas(series, domain, cursorMs, settings);
+  if (!canvas) return;
+  const rect = domain.rect;
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.beginPath();
+  ctx.rect(rect.x * ratio, rect.y * ratio, rect.w * ratio, rect.h * ratio);
+  ctx.clip();
+  ctx.drawImage(
+    canvas,
+    rect.x * ratio,
+    rect.y * ratio,
+    rect.w * ratio,
+    rect.h * ratio,
+  );
+  ctx.restore();
+}
+
 function drawBalanceAnalyzeSeries(series, layout, settings, playback, motionMode, ratio) {
   const sourceRows = motionMode
     ? series.rows.filter((row) => row.t_ms <= playback.cursorMs && row.t_ms >= playback.cursorMs - playback.trailMs)
@@ -7722,7 +7978,8 @@ function drawBalanceAnalyzeSeries(series, layout, settings, playback, motionMode
       const alpha = playback.fadeMs > 0 && ageMs > fadeStartMs
         ? clamp((playback.trailMs - ageMs) / playback.fadeMs, 0.04, 1)
         : 1;
-      ctx.strokeStyle = series.rgba(0.9 * alpha);
+      const traceOpacity = state.balanceAnalyze.heatmapMode !== 'off' ? 0.2 : 1;
+      ctx.strokeStyle = series.rgba(0.9 * alpha * traceOpacity);
       ctx.beginPath();
       ctx.moveTo(previous.x * ratio, previous.y * ratio);
       ctx.lineTo(point.x * ratio, point.y * ratio);
@@ -7739,7 +7996,7 @@ function drawBalanceAnalyzeSeries(series, layout, settings, playback, motionMode
     ctx.fill();
     ctx.stroke();
   } else {
-    ctx.strokeStyle = series.rgba(0.86);
+    ctx.strokeStyle = series.rgba(0.86 * (state.balanceAnalyze.heatmapMode !== 'off' ? 0.2 : 1));
     ctx.beginPath();
     reduced.forEach((row, index) => {
       const point = balanceAnalyzeSeriesPoint(row, layout, settings, series.xKey, series.yKey);
@@ -7805,6 +8062,7 @@ function drawBalanceAnalyze() {
   const durationMs = balanceAnalyzeDurationMs();
   if (!finite(playback.cursorMs)) playback.cursorMs = durationMs;
   const motionMode = playback.engaged && durationMs > 0;
+  drawBalanceAnalyzeHeatmap(layout, settings, series, playback, motionMode, ratio);
   series.forEach((item) => drawBalanceAnalyzeSeries(item, layout, settings, playback, motionMode, ratio));
   drawBalanceAnalyzeSecondLegTapRipples(layout, settings, playback, motionMode, ratio);
 
@@ -7828,9 +8086,11 @@ function drawBalanceAnalyze() {
   ctx.fillStyle = 'rgba(255,246,228,0.54)';
   ctx.textAlign = 'right';
   const sampleCount = series.reduce((sum, item) => sum + item.rows.length, 0);
+  const heatmapLabel = playback.heatmapMode === 'open' ? 'HEATMAP EO · '
+    : playback.heatmapMode === 'closed' ? 'HEATMAP EC · ' : '';
   const footer = motionMode
-    ? `LOOP · ${playback.trailMs} ms trail · ${playback.fadeMs} ms fade`
-    : `${paired ? 'EO + EC · ' : ''}${sampleCount.toLocaleString()} COP samples · ${Math.round(1000 / sampleIntervalMs(state.rows))} Hz`;
+    ? `LOOP · ${heatmapLabel}${playback.trailMs} ms trail · ${playback.fadeMs} ms fade`
+    : `${heatmapLabel}${paired ? 'EO + EC · ' : ''}${sampleCount.toLocaleString()} COP samples · ${Math.round(1000 / sampleIntervalMs(state.rows))} Hz`;
   ctx.fillText(footer, (width - 20) * ratio, 54 * ratio);
   if (!sampleCount) {
     ctx.fillStyle = 'rgba(255,246,228,0.72)';
@@ -9161,6 +9421,16 @@ controls.viewRight.addEventListener('click', () => setViewMode('right'));
 controls.modeNet.addEventListener('click', () => setForceMode('net'));
 controls.modeAbs.addEventListener('click', () => setForceMode('abs'));
 controls.balancePlay.addEventListener('click', toggleBalanceAnalyzePlayback);
+controls.balanceHeatmap.addEventListener('click', () => {
+  const playback = state.balanceAnalyze;
+  const modes = balanceAvailableHeatmapModes();
+  const currentIndex = Math.max(0, modes.indexOf(playback.heatmapMode));
+  playback.heatmapMode = modes[(currentIndex + 1) % modes.length];
+  playback.heatmapCacheKey = '';
+  playback.heatmapCanvas = null;
+  syncBalanceAnalyzeControls();
+  draw();
+});
 controls.balanceTrailMs.addEventListener('input', () => {
   state.balanceAnalyze.trailMs = Number(controls.balanceTrailMs.value) || 100;
   state.balanceAnalyze.fadeMs = Math.min(state.balanceAnalyze.fadeMs, state.balanceAnalyze.trailMs);

@@ -1812,12 +1812,13 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
   min-width: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: auto minmax(245px, 1fr) minmax(245px, 1fr);
+  grid-template-columns: auto auto minmax(245px, 1fr) minmax(245px, 1fr);
   align-items: center;
   gap: 10px;
 }
 
-.balancePlaybackControls .balancePlay {
+.balancePlaybackControls .balancePlay,
+.balancePlaybackControls .balanceHeatmap {
   height: 32px;
   min-width: 88px;
   padding: 0 12px;
@@ -1826,10 +1827,20 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
   background: color-mix(in srgb, var(--panel) 78%, black);
 }
 
+.balancePlaybackControls .balanceHeatmap {
+  min-width: 126px;
+}
+
 .balancePlaybackControls .balancePlay.active {
   border-color: var(--accent);
   color: #1d1205;
   background: var(--accent);
+}
+
+.balancePlaybackControls .balanceHeatmap.active {
+  border-color: rgba(255, 147, 9, 0.78);
+  color: var(--text);
+  background: linear-gradient(90deg, rgba(59, 188, 242, 0.2), rgba(255, 147, 9, 0.22));
 }
 
 .balanceEffectControl {
