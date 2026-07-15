@@ -15,6 +15,9 @@ window.JBForcePlateSessionStore = (() => {
       displayName: 'Anonymous',
       number: 0,
       position: '',
+      bodyMassKg: 0,
+      bodyMassMeasuredAt: 0,
+      bodyMassSource: '',
     },
   ];
 
@@ -39,6 +42,11 @@ window.JBForcePlateSessionStore = (() => {
       displayName: String(raw?.displayName || raw?.name || ''),
       number: Number(raw?.number ?? raw?.jerseyNumber ?? 0),
       position: String(raw?.position || ''),
+      bodyMassKg: Number(raw?.bodyMassKg) >= 10 && Number(raw?.bodyMassKg) <= 300
+        ? Number(raw.bodyMassKg)
+        : 0,
+      bodyMassMeasuredAt: Number(raw?.bodyMassMeasuredAt) || 0,
+      bodyMassSource: String(raw?.bodyMassSource || ''),
     };
   }
 
@@ -71,6 +79,7 @@ window.JBForcePlateSessionStore = (() => {
           updatedAt: Number(storedSession.updatedAt || Date.now()),
           source: storedSession.source || 'force-plate',
           storageState: storedSession.storageState || {},
+          athleteMasses: storedSession.athleteMasses || {},
           discipline: storedDiscipline.discipline || storedSession.discipline || 'squat_jump',
           disciplineSettings: storedDiscipline.settings || storedSession.disciplineSettings || {},
         }),
@@ -101,11 +110,15 @@ window.JBForcePlateSessionStore = (() => {
   }
 
   function readLibrarianApi() {
-    return localStorage.getItem(LibrarianApiStorageKey) || DefaultLibrarianApi;
+    return window.JBPerformanceHubConfig?.get('librarianApi')
+      || localStorage.getItem(LibrarianApiStorageKey)
+      || DefaultLibrarianApi;
   }
 
   function writeLibrarianApi(value) {
-    localStorage.setItem(LibrarianApiStorageKey, String(value || '').trim());
+    const normalized = String(value || '').trim();
+    window.JBPerformanceHubConfig?.set('librarianApi', normalized);
+    localStorage.setItem(LibrarianApiStorageKey, normalized);
   }
 
   function apiUrl(base, path) {
@@ -183,6 +196,80 @@ window.JBForcePlateSessionStore = (() => {
     return state.athletes.find((athlete) => String(athlete.athleteId) === String(athleteId)) ?? state.athletes[0];
   }
 
+  function validBodyMassKg(value) {
+    const massKg = Number(value);
+    return Number.isFinite(massKg) && massKg >= 10 && massKg <= 300 ? massKg : 0;
+  }
+
+  function athleteMassSnapshot(state, athleteId = state.currentAthleteId) {
+    const id = String(Number(athleteId) || 0);
+    const sessionMass = state.session?.athleteMasses?.[id];
+    const sessionKg = validBodyMassKg(sessionMass?.bodyMassKg);
+    if (sessionKg) return { ...sessionMass, bodyMassKg: sessionKg };
+    const athlete = athleteById(state, athleteId);
+    const profileKg = validBodyMassKg(athlete?.bodyMassKg);
+    if (!profileKg) return null;
+    return {
+      bodyMassKg: profileKg,
+      measuredAt: Number(athlete.bodyMassMeasuredAt) || 0,
+      source: athlete.bodyMassSource || 'profile',
+      profile: true,
+    };
+  }
+
+  function setAthleteMassSnapshot(state, athleteId, bodyMassKg, source = 'forceplate', measuredAt = Date.now()) {
+    const massKg = validBodyMassKg(bodyMassKg);
+    if (!massKg) throw new Error('Body mass must be between 10 and 300 kg');
+    const id = String(Number(athleteId) || 0);
+    state.session.athleteMasses = {
+      ...(state.session.athleteMasses || {}),
+      [id]: { bodyMassKg: massKg, measuredAt: Number(measuredAt) || Date.now(), source },
+    };
+    state.session.updatedAt = Date.now();
+    writeStoredState(state);
+    return state.session.athleteMasses[id];
+  }
+
+  function athleteForMeasurement(state, athleteId = state.currentAthleteId) {
+    const athlete = athleteById(state, athleteId);
+    if (!athlete) return null;
+    const mass = athleteMassSnapshot(state, athleteId);
+    if (!mass) return { ...athlete };
+    return {
+      ...athlete,
+      bodyMassKg: mass.bodyMassKg,
+      bodyMassMeasuredAt: mass.measuredAt,
+      bodyMassSource: mass.source,
+    };
+  }
+
+  async function updateAthleteBodyMass(state, athleteId, snapshot) {
+    const athlete = athleteById(state, athleteId);
+    const massKg = validBodyMassKg(snapshot?.bodyMassKg);
+    if (!athlete || !Number(athlete.athleteId) || !massKg) {
+      throw new Error('A named athlete and a valid measured mass are required');
+    }
+    const payload = {
+      ...athlete,
+      bodyMassKg: massKg,
+      bodyMassMeasuredAt: Number(snapshot.measuredAt) || Date.now(),
+      bodyMassSource: snapshot.source || 'forceplate',
+    };
+    const response = await fetch(apiUrl(readLibrarianApi(), `/api/athletes/${athlete.athleteId}`), {
+      method: 'PUT',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.error || `HTTP ${response.status}`);
+    const updated = normalizeAthlete(json.athlete || payload);
+    state.athletes = state.athletes.map((item) =>
+      String(item.athleteId) === String(updated.athleteId) ? updated : item);
+    writeStoredState(state);
+    return updated;
+  }
+
   function beginSession(state) {
     const now = Date.now();
     state.session = models.createSessionConfig({
@@ -194,6 +281,7 @@ window.JBForcePlateSessionStore = (() => {
       updatedAt: now,
       discipline: state.session.disciplineDefinition.discipline,
       disciplineSettings: state.session.disciplineDefinition.settings,
+      athleteMasses: {},
     });
     state.results = [];
     writeStoredState(state);
@@ -219,6 +307,8 @@ window.JBForcePlateSessionStore = (() => {
 
   return {
     athleteById,
+    athleteForMeasurement,
+    athleteMassSnapshot,
     categories,
     defaultState,
     discardSession,
@@ -228,6 +318,8 @@ window.JBForcePlateSessionStore = (() => {
     readLibrarianApi,
     readStoredState,
     stopSession,
+    setAthleteMassSnapshot,
+    updateAthleteBodyMass,
     writeLibrarianApi,
     writeStoredState,
   };

@@ -1,27 +1,17 @@
-﻿<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JB PerformanceHub - Lab</title>
-  <link rel="stylesheet" href="../../style.css">
-</head>
-<body>
-  <main class="hubShell">
-    <header class="hubHeader">
-      <div>
-        <p class="eyebrow">JB PerformanceHub</p>
-        <h1>Lab</h1>
-      </div>
-      <a class="hubStatus" href="../../index.html">Back to hub</a>
-    </header>
-    <section class="moduleTile">
-      <span class="moduleIcon">...</span>
-      <span>
-        <strong>Diagnostics and experiments placeholder</strong>
-        <small>This section will be wired after the ForcePlate module migration settles.</small>
-      </span>
-    </section>
-  </main>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JB PerformanceHub - Lab</title><link rel="stylesheet" href="../../core/theme/tokens.css"><link rel="stylesheet" href="../../core/ui/ui.css"><link rel="stylesheet" href="../../core/ui/workspace.css"></head>
+<body data-module="lab"><main class="ph-app"><header class="ph-topbar"><a class="ph-home" href="../../index.html">JB</a><div class="ph-title"><small>PerformanceHub</small><strong>Lab</strong></div><div class="ph-topbar-fill"></div><div class="ph-connection">Data current</div><button>New analysis</button></header><nav class="ph-tabs"><button class="ph-tab jb-tab-01 active" data-ph-tab="dashboard">Dashboard</button><button class="ph-tab jb-tab-01" data-ph-tab="compare">Compare</button><button class="ph-tab jb-tab-01" data-ph-tab="reports">Reports</button></nav><section class="ph-workspace">
+<section class="ph-page ph-layout-dashboard active" data-ph-page="dashboard">
+  <aside class="ph-panel"><header class="ph-panel-header"><h2>Cohort</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Category<select><option>U16</option><option>U18</option><option>A-Team</option></select></label><label class="ph-field wide">Period<select><option>Current season</option><option>Last 30 days</option></select></label><label class="ph-field wide">Athletes<select><option>All available (18)</option></select></label></div><div class="ph-panel-actions"><button class="active">APPLY</button></div></aside>
+  <section class="ph-stack ph-stack-fill"><article class="ph-panel"><header class="ph-panel-header"><h2>Group Snapshot</h2><span class="ph-fill"></span><small>U16 | 18 athletes</small></header><div class="ph-panel-body ph-metrics"><div class="ph-metric"><small>CMJ median</small><strong>31.4 cm</strong><em>+3.2%</em></div><div class="ph-metric"><small>20 m median</small><strong>3.31 s</strong><em>-0.04 s</em></div><div class="ph-metric"><small>Reaction median</small><strong>426 ms</strong><em>-11 ms</em></div></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Season Trend</h2><span class="ph-fill"></span><select><option>Performance index</option><option>CMJ</option><option>20 m sprint</option></select></header><div class="ph-panel-body"><div class="ph-chart" style="height:100%"><span class="ph-chart-label">Group median and interquartile range</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,29 L10,27 L20,28 L30,23 L40,22 L50,18 L60,19 L70,14 L80,13 L90,9 L100,8"/><path class="secondary" d="M0,33 L10,31 L20,32 L30,28 L40,27 L50,24 L60,25 L70,20 L80,19 L90,16 L100,14"/></svg></div></div></article></section>
+  <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Attention</h2></header><div class="ph-panel-body ph-stack"><div class="ph-callout"><strong>4 athletes declining</strong><small>CMJ trend below -5%</small></div><div class="ph-callout"><strong>3 asymmetry flags</strong><small>Latest value above 10%</small></div><div class="ph-callout"><strong>2 missing baselines</strong><small>No sprint data this season</small></div></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Top Percentiles</h2></header><div class="ph-panel-body"><table class="ph-table"><tr><th>Athlete</th><th>Metric</th><th>%ile</th></tr><tr><td>Bartonek</td><td>CMJ</td><td class="ph-rank">94</td></tr><tr><td>Dolezal</td><td>20 m</td><td>89</td></tr><tr><td>Rijka</td><td>Reaction</td><td>86</td></tr></table></div></article></aside>
+</section>
+<section class="ph-page ph-layout-operational" data-ph-page="compare">
+  <article class="ph-panel"><header class="ph-panel-header"><h2>Cohort Comparison</h2><span class="ph-fill"></span><button>Save view</button></header><div class="ph-command-bar"><select><option>U16</option></select><strong>vs</strong><select><option>U18</option></select><span class="ph-fill"></span><select><option>CMJ ToV Height</option><option>20 m sprint</option></select></div><div class="ph-panel-body"><div class="ph-chart" style="min-height:430px"><span class="ph-chart-label">Distribution by cohort</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,35 C15,35 17,8 32,8 C47,8 48,35 62,35"/><path class="secondary" d="M28,35 C43,35 47,14 62,14 C77,14 82,35 100,35"/></svg></div></div></article>
+  <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Comparison</h2></header><div class="ph-panel-body ph-metrics" style="grid-template-columns:1fr"><div class="ph-metric"><small>U16 median</small><strong>31.4 cm</strong></div><div class="ph-metric"><small>U18 median</small><strong>34.7 cm</strong></div><div class="ph-metric"><small>Difference</small><strong>+10.5%</strong></div></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Interpretation</h2></header><div class="ph-panel-body"><div class="ph-callout"><strong>Expected separation</strong><small>The difference is consistent with age-group reference data. Six U16 athletes overlap the U18 median range.</small></div></div></article></aside>
+</section>
+<section class="ph-page ph-layout-dashboard" data-ph-page="reports">
+  <aside class="ph-panel"><header class="ph-panel-header"><h2>Saved Reports</h2></header><div class="ph-panel-body ph-list"><div class="ph-list-item selected"><span><strong>Weekly readiness</strong><small>U16 | automatic</small></span><b class="ph-list-value">Today</b></div><div class="ph-list-item"><span><strong>Monthly development</strong><small>All categories</small></span><b class="ph-list-value">Jul 1</b></div><div class="ph-list-item"><span><strong>Pre-season baseline</strong><small>A-Team</small></span><b class="ph-list-value">Jun 18</b></div></div></aside>
+  <article class="ph-panel"><header class="ph-panel-header"><h2>Weekly Readiness</h2><span class="ph-fill"></span><button>Export PDF</button></header><div class="ph-panel-body"><div class="ph-placeholder-photo">Report preview</div><div class="ph-metrics" style="margin-top:10px"><div class="ph-metric"><small>Ready</small><strong>12</strong></div><div class="ph-metric"><small>Monitor</small><strong>4</strong></div><div class="ph-metric"><small>Review</small><strong>2</strong></div></div></div></article>
+  <aside class="ph-panel"><header class="ph-panel-header"><h2>Report Builder</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Template<select><option>Weekly readiness</option></select></label><label class="ph-field wide">Category<select><option>U16</option></select></label><label class="ph-field wide">Included modules<select><option>All measurement modules</option></select></label><label class="ph-field wide">Recipients<input value="Coaching staff"></label></div><div class="ph-panel-actions"><button class="active">GENERATE</button></div></aside>
+</section>
+</section></main><script src="../../core/ui/workspace.js"></script></body></html>

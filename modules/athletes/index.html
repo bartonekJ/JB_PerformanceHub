@@ -1,27 +1,19 @@
-﻿<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>JB PerformanceHub - Athletes</title>
-  <link rel="stylesheet" href="../../style.css">
-</head>
-<body>
-  <main class="hubShell">
-    <header class="hubHeader">
-      <div>
-        <p class="eyebrow">JB PerformanceHub</p>
-        <h1>Athletes</h1>
-      </div>
-      <a class="hubStatus" href="../../index.html">Back to hub</a>
-    </header>
-    <section class="moduleTile">
-      <span class="moduleIcon">...</span>
-      <span>
-        <strong>Roster and categories placeholder</strong>
-        <small>This section will be wired after the ForcePlate module migration settles.</small>
-      </span>
-    </section>
-  </main>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JB PerformanceHub - Athletes</title><link rel="stylesheet" href="../../core/theme/tokens.css"><link rel="stylesheet" href="../../core/ui/ui.css"><link rel="stylesheet" href="../../core/ui/workspace.css"></head>
+<body data-module="athletes"><main class="ph-app">
+<header class="ph-topbar"><a class="ph-home" href="../../index.html">JB</a><div class="ph-title"><small>PerformanceHub</small><strong>Athletes</strong></div><div class="ph-topbar-fill"></div><div class="ph-connection">Librarian synced</div><button>Find athlete</button></header>
+<nav class="ph-tabs"><button class="ph-tab jb-tab-01 active" data-ph-tab="overview">Overview</button><button class="ph-tab jb-tab-01" data-ph-tab="performance">Performance</button><button class="ph-tab jb-tab-01" data-ph-tab="history">History</button></nav>
+<section class="ph-workspace">
+<section class="ph-page ph-layout-dashboard active" data-ph-page="overview">
+  <aside class="ph-panel"><header class="ph-panel-header"><h2>Athletes</h2></header><div class="ph-command-bar"><select><option>U16</option><option>U18</option><option>A-Team</option></select></div><div class="ph-panel-body ph-list"><div class="ph-list-item selected"><span><strong>#9 Bartonek</strong><small>Last test today</small></span><b class="ph-list-value">Ready</b></div><div class="ph-list-item"><span><strong>#21 Dolezal</strong><small>Last test Jul 10</small></span><b class="ph-list-value">Review</b></div><div class="ph-list-item"><span><strong>#8 Kanka</strong><small>Last test Jul 8</small></span><b class="ph-list-value">Ready</b></div><div class="ph-list-item"><span><strong>#16 Fulin</strong><small>Last test Jul 5</small></span><b class="ph-list-value">Ready</b></div></div></aside>
+  <section class="ph-stack ph-stack-fill"><article class="ph-panel"><header class="ph-panel-header"><h2>Athlete Profile</h2><span class="ph-fill"></span><button>Edit profile</button></header><div class="ph-panel-body"><div class="ph-athlete"><div class="ph-avatar">09</div><div><h2>Jiri Bartonek</h2><p>U16 | Forward | 67.4 kg | 178 cm</p></div></div></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Performance Snapshot</h2><span class="ph-fill"></span><small>Last 30 days</small></header><div class="ph-panel-body"><div class="ph-metrics"><div class="ph-metric"><small>CMJ ToV height</small><strong>34.8 cm</strong><em>+6.1%</em></div><div class="ph-metric"><small>20 m sprint</small><strong>3.12 s</strong><em>-0.08 s</em></div><div class="ph-metric"><small>Reaction</small><strong>398 ms</strong><em>-24 ms</em></div></div><div class="ph-chart" style="margin-top:10px"><span class="ph-chart-label">Composite performance index</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,31 L10,29 L20,30 L30,24 L40,25 L50,19 L60,21 L70,14 L80,16 L90,9 L100,7"/><path class="secondary" d="M0,26 L100,26"/></svg></div></div></article></section>
+  <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Readiness</h2></header><div class="ph-panel-body ph-stack"><div><small>Force</small><div class="ph-progress"><span style="width:84%"></span></div></div><div><small>Speed</small><div class="ph-progress"><span style="width:78%"></span></div></div><div><small>Reaction</small><div class="ph-progress"><span style="width:91%"></span></div></div></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Recent Activity</h2></header><div class="ph-panel-body ph-list"><div class="ph-list-item"><span><strong>ForcePlates</strong><small>CMJ | 3 attempts</small></span><b class="ph-list-value">Today</b></div><div class="ph-list-item"><span><strong>TimingGates</strong><small>20 m sprint</small></span><b class="ph-list-value">Jul 10</b></div><div class="ph-list-item"><span><strong>Reaction Pucks</strong><small>Random 8</small></span><b class="ph-list-value">Jul 8</b></div></div></article></aside>
+</section>
+<section class="ph-page ph-layout-operational" data-ph-page="performance">
+  <article class="ph-panel"><header class="ph-panel-header"><h2>Performance Trends</h2><span class="ph-fill"></span><select><option>Countermovement Jump</option><option>20 m Sprint</option><option>Random Reaction</option></select><select><option>90 days</option><option>Season</option></select></header><div class="ph-panel-body"><div class="ph-chart" style="min-height:420px"><span class="ph-chart-label">CMJ ToV height</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,29 L8,31 L16,26 L24,27 L32,22 L40,24 L48,17 L56,18 L64,14 L72,15 L80,10 L88,12 L100,7"/><path class="secondary" d="M0,25 L100,25"/></svg></div><div class="ph-metrics" style="margin-top:10px"><div class="ph-metric"><small>Current</small><strong>34.8 cm</strong></div><div class="ph-metric"><small>Personal best</small><strong>35.5 cm</strong></div><div class="ph-metric"><small>Percentile U16</small><strong>82nd</strong></div></div></div></article>
+  <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Metric</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Discipline<select><option>Countermovement Jump</option></select></label><label class="ph-field wide">Metric<select><option>ToV Jump Height</option><option>Peak Propulsive Power</option><option>Asymmetry</option></select></label></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Coach Notes</h2></header><div class="ph-panel-body"><div class="ph-callout"><strong>Positive trend</strong><small>Jump height improved in four consecutive sessions while asymmetry remains below 5%.</small></div></div><div class="ph-panel-actions"><button>Add note</button></div></article></aside>
+</section>
+<section class="ph-page ph-layout-operational" data-ph-page="history">
+  <article class="ph-panel"><header class="ph-panel-header"><h2>Measurement History</h2><span class="ph-fill"></span><button>Export athlete</button></header><div class="ph-command-bar"><select><option>All modules</option><option>ForcePlates</option><option>TimingGates</option></select><input placeholder="Search discipline"><span class="ph-fill"></span><select><option>This season</option></select></div><div class="ph-panel-body"><table class="ph-table"><tr><th>Date</th><th>Module</th><th>Discipline</th><th>Result</th><th>Session</th></tr><tr><td>Jul 12</td><td>ForcePlates</td><td>CMJ</td><td>34.8 cm</td><td>U16 jumps</td></tr><tr><td>Jul 10</td><td>TimingGates</td><td>20 m sprint</td><td>3.12 s</td><td>Acceleration</td></tr><tr><td>Jul 8</td><td>Reaction Pucks</td><td>Random 8</td><td>398 ms</td><td>Reaction baseline</td></tr><tr><td>Jul 2</td><td>ForcePlates</td><td>Squat Jump</td><td>31.2 cm</td><td>U16 jumps</td></tr></table></div></article>
+  <aside class="ph-panel"><header class="ph-panel-header"><h2>Selected Result</h2></header><div class="ph-panel-body ph-stack"><div class="ph-metric"><small>CMJ ToV Height</small><strong>34.8 cm</strong><em>Personal percentile 94</em></div><div class="ph-placeholder-photo">Force curve preview</div><div class="ph-callout"><strong>Source retained</strong><small>Raw ForcePlate trace is available for re-analysis.</small></div></div><div class="ph-panel-actions"><button>Open in ForcePlates</button></div></aside>
+</section>
+</section></main><script src="../../core/ui/workspace.js"></script></body></html>

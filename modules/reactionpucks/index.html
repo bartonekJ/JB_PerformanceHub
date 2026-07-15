@@ -1,27 +1,32 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JB PerformanceHub - Reaction Pucks</title>
-  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../../core/theme/tokens.css"><link rel="stylesheet" href="../../core/ui/ui.css"><link rel="stylesheet" href="../../core/ui/workspace.css">
 </head>
-<body>
-  <main class="hubShell">
-    <header class="hubHeader">
-      <div>
-        <p class="eyebrow">JB PerformanceHub</p>
-        <h1>Reaction Pucks</h1>
-      </div>
-      <a class="hubStatus" href="../../index.html">Back to hub</a>
-    </header>
-    <section class="moduleTile">
-      <span class="moduleIcon">...</span>
-      <span>
-        <strong>Reaction Pucks module placeholder</strong>
-        <small>This section will be wired after the ForcePlate module migration settles.</small>
-      </span>
+<body data-module="reactionpucks">
+<main class="ph-app">
+  <header class="ph-topbar"><a class="ph-home" href="../../index.html">JB</a><div class="ph-title"><small>PerformanceHub</small><strong>Reaction Pucks</strong></div><div class="ph-topbar-fill"></div><div class="ph-connection">8 pucks ready</div><button type="button">Device status</button></header>
+  <nav class="ph-tabs"><button class="ph-tab jb-tab-01 active" data-ph-tab="test">Quick Test</button><button class="ph-tab jb-tab-01" data-ph-tab="session">Session</button><button class="ph-tab jb-tab-01" data-ph-tab="results">Results</button></nav>
+  <section class="ph-workspace">
+    <section class="ph-page ph-layout-operational active" data-ph-page="test">
+      <article class="ph-panel"><header class="ph-panel-header"><h2>Reaction Field</h2><span class="ph-fill"></span><small>Random 8</small></header><div class="ph-panel-body" style="display:grid;place-items:center;background:var(--jb-color-bg-panel-3)"><div style="width:min(720px,90%);aspect-ratio:2/1;display:grid;grid-template-columns:repeat(4,1fr);gap:9%;align-items:center">
+        <button style="aspect-ratio:1;border-radius:50%;font-size:24px">1</button><button style="aspect-ratio:1;border-radius:50%;font-size:24px">2</button><button class="active" style="aspect-ratio:1;border-radius:50%;font-size:24px">3</button><button style="aspect-ratio:1;border-radius:50%;font-size:24px">4</button><button style="aspect-ratio:1;border-radius:50%;font-size:24px">5</button><button style="aspect-ratio:1;border-radius:50%;font-size:24px">6</button><button style="aspect-ratio:1;border-radius:50%;font-size:24px">7</button><button style="aspect-ratio:1;border-radius:50%;font-size:24px">8</button>
+      </div></div><div class="ph-panel-actions"><button class="active" data-ph-action="toggle-run">START</button><button>RESET</button></div></article>
+      <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Test Settings</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Protocol<select><option>Random Reaction</option><option>Go / No-Go</option><option>Sequence Memory</option></select></label><label class="ph-field">Duration<select><option>30 s</option><option>45 s</option><option>60 s</option></select></label><label class="ph-field">Active pucks<select><option>8</option><option>6</option><option>4</option></select></label><label class="ph-field wide">Athlete<select><option>#10 Rijka</option><option>#9 Bartonek</option></select></label></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Live Metrics</h2></header><div class="ph-panel-body ph-metrics"><div class="ph-metric"><small>Hits</small><strong>18</strong></div><div class="ph-metric"><small>Average</small><strong>412 ms</strong></div><div class="ph-metric"><small>Best</small><strong>328 ms</strong></div><div class="ph-metric"><small>Misses</small><strong>2</strong></div><div class="ph-metric"><small>Accuracy</small><strong>90%</strong></div><div class="ph-metric"><small>Left / Right</small><strong>48 / 52</strong></div></div></article></aside>
     </section>
-  </main>
-</body>
-</html>
+    <section class="ph-page ph-layout-dashboard" data-ph-page="session">
+      <aside class="ph-panel"><header class="ph-panel-header"><h2>Athletes</h2></header><div class="ph-command-bar"><select><option>U16</option></select></div><div class="ph-panel-body ph-list"><div class="ph-list-item selected"><span><strong>#10 Rijka</strong><small>2 attempts</small></span><b class="ph-list-value">412 ms</b></div><div class="ph-list-item"><span><strong>#9 Bartonek</strong><small>3 attempts</small></span><b class="ph-list-value">398 ms</b></div><div class="ph-list-item"><span><strong>#21 Dolezal</strong><small>Waiting</small></span><b class="ph-list-value">--</b></div></div></aside>
+      <section class="ph-stack ph-stack-fill"><article class="ph-panel"><header class="ph-panel-header"><h2>Current Athlete</h2></header><div class="ph-panel-body"><div class="ph-athlete"><div class="ph-avatar">10</div><div><h2>Martin Rijka</h2><p>U16 | attempt 3</p></div></div></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Current Test</h2><span class="ph-fill"></span><small>Random Reaction</small></header><div class="ph-panel-body"><div class="ph-chart"><span class="ph-chart-label">Reaction time per hit</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,20 L7,27 L14,18 L21,25 L28,14 L35,19 L42,9 L49,24 L56,16 L63,12 L70,20 L77,8 L84,14 L92,7 L100,11"/></svg></div></div><div class="ph-panel-actions"><button class="active" data-ph-action="toggle-run">START</button><button>DISCARD</button></div></article></section>
+      <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Session</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Name<input value="U16 reaction baseline"></label><label class="ph-field wide">Protocol<select><option>Random Reaction</option></select></label></div><div class="ph-panel-actions"><button class="active">IN PROGRESS</button><button>STOP</button></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Leaderboard</h2></header><div class="ph-panel-body"><table class="ph-table"><tr><th>#</th><th>Athlete</th><th>Avg.</th></tr><tr><td class="ph-rank">1</td><td>Bartonek</td><td>398 ms</td></tr><tr><td>2</td><td>Rijka</td><td>412 ms</td></tr><tr><td>3</td><td>Kanka</td><td>427 ms</td></tr></table></div></article></aside>
+    </section>
+    <section class="ph-page ph-layout-dashboard" data-ph-page="results">
+      <aside class="ph-panel"><header class="ph-panel-header"><h2>Sessions</h2></header><div class="ph-panel-body ph-list"><div class="ph-list-item selected"><span><strong>U16 reaction baseline</strong><small>Today | Random 8</small></span><b class="ph-list-value">12 athletes</b></div><div class="ph-list-item"><span><strong>U18 Go / No-Go</strong><small>Jul 10</small></span><b class="ph-list-value">16 athletes</b></div></div></aside>
+      <article class="ph-panel"><header class="ph-panel-header"><h2>Group Distribution</h2><span class="ph-fill"></span><button>Export</button></header><div class="ph-panel-body"><div class="ph-metrics"><div class="ph-metric"><small>Median reaction</small><strong>421 ms</strong></div><div class="ph-metric"><small>Accuracy</small><strong>91%</strong></div><div class="ph-metric"><small>Consistency</small><strong>7.8%</strong></div></div><div class="ph-chart" style="margin-top:10px"><span class="ph-chart-label">Reaction time and accuracy trend</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,28 L10,27 L20,25 L30,26 L40,21 L50,20 L60,17 L70,18 L80,13 L90,11 L100,9"/><path class="secondary" d="M0,16 L10,17 L20,15 L30,14 L40,13 L50,12 L60,13 L70,9 L80,10 L90,7 L100,8"/></svg></div></div></article>
+      <aside class="ph-panel"><header class="ph-panel-header"><h2>Highlights</h2></header><div class="ph-panel-body ph-stack"><div class="ph-callout"><strong>Best improvement</strong><small>Kanka -38 ms since June</small></div><div class="ph-callout"><strong>Most consistent</strong><small>Bartonek CV 4.2%</small></div><div class="ph-callout"><strong>Review</strong><small>2 athletes below 80% accuracy</small></div></div></aside>
+    </section>
+  </section>
+</main>
+<script src="../../core/ui/workspace.js"></script>
+</body></html>

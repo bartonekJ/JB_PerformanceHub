@@ -1,22 +1,5 @@
-﻿:root {
-  --bg: #1d1d1c;
-  --panel: #2f2f2c;
-  --panel-soft: #383834;
-  --line: #70685c;
-  --text: #f2eadb;
-  --muted: #9d9486;
-  --accent: #ff9309;
-  --accent-soft: rgba(255, 147, 9, 0.18);
-}
-
-* { box-sizing: border-box; }
-
-html, body { margin: 0; min-height: 100%; }
-
-body {
-  font-family: Arial, Helvetica, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+﻿body {
+  font-family: var(--jb-font-display);
 }
 
 .hubShell {
@@ -31,13 +14,13 @@ body {
   display: flex;
   align-items: end;
   justify-content: space-between;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--jb-color-line);
   padding-bottom: 18px;
 }
 
 .eyebrow {
   margin: 0 0 4px;
-  color: var(--accent);
+  color: var(--jb-module-primary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 700;
@@ -51,10 +34,11 @@ h1 {
 }
 
 .hubStatus {
-  color: var(--muted);
-  border: 1px solid var(--line);
+  color: var(--jb-color-text-muted);
+  border: 1px solid var(--jb-color-line);
   padding: 10px 14px;
-  background: #222220;
+  background: var(--jb-color-bg-panel-3);
+  text-decoration: none;
 }
 
 .moduleGrid {
@@ -70,11 +54,11 @@ h1 {
   align-items: end;
   gap: 18px;
   padding: 22px;
-  color: var(--text);
+  color: var(--jb-color-text);
   text-decoration: none;
-  background: linear-gradient(135deg, var(--panel), var(--panel-soft));
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: linear-gradient(135deg, var(--jb-color-bg-panel), #383834);
+  border: 1px solid var(--jb-color-line);
+  border-radius: var(--jb-radius-card);
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
   overflow: hidden;
   position: relative;
@@ -85,14 +69,14 @@ h1 {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 78% 18%, rgba(255, 147, 9, 0.18), transparent 28%),
+    radial-gradient(circle at 78% 18%, var(--jb-module-primary-soft), transparent 28%),
     linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.18));
   pointer-events: none;
 }
 
 .moduleTile:hover,
 .moduleTile:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--jb-module-primary);
   background: linear-gradient(135deg, #343431, #42423d);
   transform: translateY(-2px);
   outline: none;
@@ -107,7 +91,7 @@ h1 {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--jb-module-primary);
   color: #151514;
   font-weight: 900;
   font-size: 18px;
@@ -122,16 +106,9 @@ h1 {
 
 .moduleTile small {
   display: block;
-  color: var(--muted);
+  color: var(--jb-color-text-muted);
   font-size: 14px;
 }
-
-.forceplates .moduleIcon { background: #ff9309; }
-.timinggates .moduleIcon { background: #d1d1d1; }
-.reactionpucks .moduleIcon { background: #8fdb00; }
-.athletes .moduleIcon { background: #bbff00; }
-.lab .moduleIcon { background: #ff8240; }
-.settings .moduleIcon { background: #aa78ff; }
 
 @media (max-width: 900px) {
   .hubShell { padding: 18px; }

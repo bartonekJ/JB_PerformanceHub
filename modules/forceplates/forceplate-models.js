@@ -31,11 +31,13 @@ window.JBForcePlateModels = (() => {
       },
     },
     {
-      id: 'balance',
-      label: 'Balance',
-      resultKey: 'balance',
+      id: 'eyes_closed_balance',
+      label: 'Static Balance',
+      resultKey: 'staticBalance',
       settings: {
-        traceWindowMs: 30000,
+        durationSec: 30,
+        legMode: 'both',
+        visionMode: 'closed',
       },
     },
     {
@@ -46,10 +48,21 @@ window.JBForcePlateModels = (() => {
         traceWindowMs: 10000,
       },
     },
+    {
+      id: 'scale',
+      label: 'Scale',
+      resultKey: 'bodyMass',
+      settings: {},
+    },
   ];
 
+  function normalizeDisciplineId(id) {
+    return id === 'balance' ? 'eyes_closed_balance' : id;
+  }
+
   function disciplineDefinition(id) {
-    return DisciplineDefinitions.find((definition) => definition.id === id) ?? DisciplineDefinitions[0];
+    const normalizedId = normalizeDisciplineId(id);
+    return DisciplineDefinitions.find((definition) => definition.id === normalizedId) ?? DisciplineDefinitions[0];
   }
 
   function disciplineSettings(id, overrides = {}) {
@@ -100,9 +113,11 @@ window.JBForcePlateModels = (() => {
     updatedAt = Date.now(),
     source = 'force-plate',
     storageState = {},
+    athleteMasses = {},
     discipline = 'squat_jump',
     disciplineSettings: settings = {},
   } = {}) {
+    const normalizedDiscipline = normalizeDisciplineId(discipline);
     return {
       schema: 'jb.session.v1',
       sessionId,
@@ -120,10 +135,13 @@ window.JBForcePlateModels = (() => {
         exportedAt: storageState.exportedAt || 0,
         syncedAt: storageState.syncedAt || 0,
       },
+      athleteMasses: athleteMasses && typeof athleteMasses === 'object'
+        ? { ...athleteMasses }
+        : {},
       disciplineDefinition: {
-        discipline,
-        disciplineLabel: disciplineDefinition(discipline).label,
-        settings: disciplineSettings(discipline, settings),
+        discipline: normalizedDiscipline,
+        disciplineLabel: disciplineDefinition(normalizedDiscipline).label,
+        settings: disciplineSettings(normalizedDiscipline, settings),
       },
     };
   }
@@ -133,6 +151,7 @@ window.JBForcePlateModels = (() => {
     sessionId,
     measuredAt = Date.now(),
     athlete,
+    bodyMassSnapshot = null,
     category = '',
     discipline = 'squat_jump',
     disciplineSettings: settings = {},
@@ -142,6 +161,7 @@ window.JBForcePlateModels = (() => {
     metrics = null,
     landmarks = null,
   }) {
+    const normalizedDiscipline = normalizeDisciplineId(discipline);
     return {
       schema: 'jb.forceplate.result.v1',
       resultId,
@@ -151,11 +171,12 @@ window.JBForcePlateModels = (() => {
       athleteId: Number(athlete?.athleteId || 0),
       athleteName: athleteDisplayName(athlete),
       athleteSnapshot: athlete ? { ...athlete } : null,
+      bodyMassSnapshot: bodyMassSnapshot ? { ...bodyMassSnapshot } : null,
       category: category || athlete?.category || '',
       disciplineDefinition: {
-        discipline,
-        disciplineLabel: disciplineDefinition(discipline).label,
-        settings: disciplineSettings(discipline, settings),
+        discipline: normalizedDiscipline,
+        disciplineLabel: disciplineDefinition(normalizedDiscipline).label,
+        settings: disciplineSettings(normalizedDiscipline, settings),
       },
       rawTrace,
       traceHash,

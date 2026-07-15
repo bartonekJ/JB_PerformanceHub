@@ -1,0 +1,55 @@
+﻿:root {
+  color-scheme: dark;
+
+  --jb-color-bg-app: #1d1d1c;
+  --jb-color-bg-panel: #2f2f2c;
+  --jb-color-bg-panel-2: #282827;
+  --jb-color-bg-panel-3: #202020;
+  --jb-color-bg-control: #151515;
+  --jb-color-line: #70685c;
+  --jb-color-line-soft: #3f3b35;
+  --jb-color-text: #fff6e4;
+  --jb-color-text-muted: #a99f8d;
+  --jb-color-text-dim: #7e7466;
+  --jb-color-shadow: rgba(0, 0, 0, 0.38);
+
+  --jb-module-primary: #ff9309;
+  --jb-module-secondary: #8fdb00;
+  --jb-module-primary-soft: rgba(255, 147, 9, 0.18);
+
+  --jb-font-ui: "Trebuchet MS", Arial, sans-serif;
+  --jb-font-display: Arial, Helvetica, sans-serif;
+  --jb-font-size-tab-01: 14px;
+  --jb-font-size-button-01: 14px;
+  --jb-font-size-label-01: 12px;
+
+  --jb-radius-control: 4px;
+  --jb-radius-card: 8px;
+  --jb-space-01: 4px;
+  --jb-space-02: 8px;
+  --jb-space-03: 12px;
+  --jb-space-04: 16px;
+  --jb-space-05: 22px;
+
+  --jb-tab-01-height: 38px;
+  --jb-tab-01-min-width: 118px;
+  --jb-tab-01-bg: var(--jb-color-bg-panel-2);
+  --jb-tab-01-active-bg: var(--jb-module-primary);
+  --jb-tab-01-border: var(--jb-color-line);
+  --jb-tab-01-text: var(--jb-color-line);
+  --jb-tab-01-active-text: #1d1205;
+
+  --jb-button-01-bg: var(--jb-color-bg-panel-2);
+  --jb-button-01-active-bg: var(--jb-module-primary);
+  --jb-button-01-border: var(--jb-color-line);
+  --jb-button-01-text: var(--jb-color-line);
+  --jb-button-01-active-text: #1d1205;
+
+  --jb-input-small-bg: var(--jb-color-bg-control);
+  --jb-input-small-border: var(--jb-color-line-soft);
+  --jb-input-small-text: var(--jb-color-text);
+
+  --jb-spacer-b-width: 2px;
+  --jb-spacer-b-style: solid;
+  --jb-spacer-b-color: var(--jb-color-line-soft);
+}

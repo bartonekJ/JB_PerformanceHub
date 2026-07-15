@@ -1,27 +1,79 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JB PerformanceHub - TimingGates</title>
-  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../../core/theme/tokens.css">
+  <link rel="stylesheet" href="../../core/ui/ui.css">
+  <link rel="stylesheet" href="../../core/ui/workspace.css">
 </head>
-<body>
-  <main class="hubShell">
-    <header class="hubHeader">
-      <div>
-        <p class="eyebrow">JB PerformanceHub</p>
-        <h1>TimingGates</h1>
-      </div>
-      <a class="hubStatus" href="../../index.html">Back to hub</a>
+<body data-module="timinggates">
+  <main class="ph-app">
+    <header class="ph-topbar">
+      <a class="ph-home" href="../../index.html" aria-label="Back to hub">JB</a>
+      <div class="ph-title"><small>PerformanceHub</small><strong>TimingGates</strong></div>
+      <div class="ph-topbar-fill"></div>
+      <div class="ph-connection">6 devices ready</div>
+      <button type="button">Device status</button>
     </header>
-    <section class="moduleTile">
-      <span class="moduleIcon">...</span>
-      <span>
-        <strong>TimingGates module placeholder</strong>
-        <small>This section will be wired after the ForcePlate module migration settles.</small>
-      </span>
+    <nav class="ph-tabs" role="tablist">
+      <button class="ph-tab jb-tab-01 active" data-ph-tab="quick" type="button">Quick Run</button>
+      <button class="ph-tab jb-tab-01" data-ph-tab="session" type="button">Session</button>
+      <button class="ph-tab jb-tab-01" data-ph-tab="results" type="button">Results</button>
+    </nav>
+    <section class="ph-workspace">
+      <section class="ph-page ph-layout-operational active" data-ph-page="quick">
+        <article class="ph-panel">
+          <header class="ph-panel-header"><h2>Live Course</h2><span class="ph-fill"></span><small>Ready</small></header>
+          <div class="ph-command-bar"><strong>Sprint 20 m</strong><span class="ph-fill"></span><button type="button">Reset</button></div>
+          <div class="ph-lane">
+            <div class="ph-gate active"><small>Start</small><div class="ph-gate-line"></div><strong>0.000</strong></div>
+            <div class="ph-gate"><small>5 m</small><div class="ph-gate-line"></div><strong>--</strong></div>
+            <div class="ph-gate"><small>10 m</small><div class="ph-gate-line"></div><strong>--</strong></div>
+            <div class="ph-gate"><small>15 m</small><div class="ph-gate-line"></div><strong>--</strong></div>
+            <div class="ph-gate"><small>20 m</small><div class="ph-gate-line"></div><strong>--</strong></div>
+            <div class="ph-gate"><small>Finish</small><div class="ph-gate-line"></div><strong>--</strong></div>
+          </div>
+          <div class="ph-panel-actions"><button class="active" data-ph-action="toggle-run" type="button">START</button><button type="button">ABORT</button></div>
+        </article>
+        <aside class="ph-stack">
+          <article class="ph-panel"><header class="ph-panel-header"><h2>Run Settings</h2></header><div class="ph-panel-body ph-form-grid">
+            <label class="ph-field wide">Mode<select><option>Sprint</option><option>Flying Sprint</option><option>Shuttle</option></select></label>
+            <label class="ph-field">Distance<select><option>20 m</option><option>30 m</option><option>40 yd</option></select></label>
+            <label class="ph-field">Attempts<input value="3"></label>
+            <label class="ph-field wide">Athlete<select><option>#9 Bartonek</option><option>#21 Dolezal</option></select></label>
+          </div></article>
+          <article class="ph-panel"><header class="ph-panel-header"><h2>Devices</h2></header><div class="ph-panel-body ph-device-grid">
+            <div class="ph-device"><i class="ph-device-state"></i><strong>Start box</strong><small>Battery 88%</small></div>
+            <div class="ph-device"><i class="ph-device-state"></i><strong>Gate 1</strong><small>5 m</small></div>
+            <div class="ph-device"><i class="ph-device-state"></i><strong>Gate 2</strong><small>10 m</small></div>
+            <div class="ph-device"><i class="ph-device-state"></i><strong>Gate 3</strong><small>20 m</small></div>
+          </div></article>
+        </aside>
+      </section>
+
+      <section class="ph-page ph-layout-dashboard" data-ph-page="session">
+        <aside class="ph-panel"><header class="ph-panel-header"><h2>Session Roster</h2></header><div class="ph-command-bar"><select><option>U16</option><option>U18</option></select></div><div class="ph-panel-body ph-list">
+          <div class="ph-list-item selected"><span><strong>#9 Bartonek</strong><small>2 of 3 runs</small></span><b class="ph-list-value">3.12 s</b></div>
+          <div class="ph-list-item"><span><strong>#21 Dolezal</strong><small>3 of 3 runs</small></span><b class="ph-list-value">3.18 s</b></div>
+          <div class="ph-list-item"><span><strong>#8 Kanka</strong><small>1 of 3 runs</small></span><b class="ph-list-value">3.24 s</b></div>
+          <div class="ph-list-item"><span><strong>#16 Fulin</strong><small>Waiting</small></span><b class="ph-list-value">--</b></div>
+        </div></aside>
+        <section class="ph-stack ph-stack-fill">
+          <article class="ph-panel"><header class="ph-panel-header"><h2>Current Athlete</h2></header><div class="ph-panel-body"><div class="ph-athlete"><div class="ph-avatar">09</div><div><h2>Jiri Bartonek</h2><p>U16 | 2 completed runs</p></div></div></div></article>
+          <article class="ph-panel"><header class="ph-panel-header"><h2>Live Run</h2><span class="ph-fill"></span><small>20 m sprint</small></header><div class="ph-lane"><div class="ph-gate active"><small>Start</small><div class="ph-gate-line"></div><strong>0.000</strong></div><div class="ph-gate active"><small>5 m</small><div class="ph-gate-line"></div><strong>1.09</strong></div><div class="ph-gate active"><small>10 m</small><div class="ph-gate-line"></div><strong>1.82</strong></div><div class="ph-gate"><small>20 m</small><div class="ph-gate-line"></div><strong>--</strong></div></div><div class="ph-panel-actions"><button class="active" data-ph-action="toggle-run" type="button">START</button><button type="button">DISCARD</button></div></article>
+        </section>
+        <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Session</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Name<input value="U16 acceleration"></label><label class="ph-field">Mode<select><option>Sprint</option></select></label><label class="ph-field">Distance<select><option>20 m</option></select></label></div><div class="ph-panel-actions"><button class="active" type="button">IN PROGRESS</button><button type="button">STOP</button></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Leaderboard</h2></header><div class="ph-panel-body"><table class="ph-table"><tr><th>#</th><th>Athlete</th><th>Best</th></tr><tr><td class="ph-rank">1</td><td>Bartonek</td><td>3.12</td></tr><tr><td>2</td><td>Dolezal</td><td>3.18</td></tr><tr><td>3</td><td>Kanka</td><td>3.24</td></tr></table></div></article></aside>
+      </section>
+
+      <section class="ph-page ph-layout-dashboard" data-ph-page="results">
+        <aside class="ph-panel"><header class="ph-panel-header"><h2>Sessions</h2></header><div class="ph-command-bar"><input placeholder="Search sessions"></div><div class="ph-panel-body ph-list"><div class="ph-list-item selected"><span><strong>U16 acceleration</strong><small>Today | 14 athletes</small></span><b class="ph-list-value">42 runs</b></div><div class="ph-list-item"><span><strong>U18 speed</strong><small>Yesterday | 16 athletes</small></span><b class="ph-list-value">48 runs</b></div><div class="ph-list-item"><span><strong>A-Team pre-season</strong><small>Jul 8 | 24 athletes</small></span><b class="ph-list-value">72 runs</b></div></div></aside>
+        <article class="ph-panel"><header class="ph-panel-header"><h2>Acceleration Overview</h2><span class="ph-fill"></span><button type="button">Export</button></header><div class="ph-panel-body"><div class="ph-metrics"><div class="ph-metric"><small>Team median</small><strong>3.28 s</strong><em>-0.06 s</em></div><div class="ph-metric"><small>Fastest</small><strong>3.12 s</strong><em>Bartonek</em></div><div class="ph-metric"><small>Completion</small><strong>93%</strong><em>39 / 42 valid</em></div></div><div class="ph-chart" style="margin-top:10px"><span class="ph-chart-label">20 m result by athlete</span><svg viewBox="0 0 100 40" preserveAspectRatio="none"><path d="M0,31 L8,28 L16,32 L24,22 L32,24 L40,17 L48,21 L56,14 L64,19 L72,10 L80,15 L88,8 L100,12"/><path class="secondary" d="M0,25 L100,25"/></svg></div></div></article>
+        <aside class="ph-panel"><header class="ph-panel-header"><h2>Ranking</h2></header><div class="ph-panel-body"><table class="ph-table"><tr><th>#</th><th>Athlete</th><th>20 m</th><th>10 m</th></tr><tr><td class="ph-rank">1</td><td>Bartonek</td><td>3.12</td><td>1.82</td></tr><tr><td>2</td><td>Dolezal</td><td>3.18</td><td>1.85</td></tr><tr><td>3</td><td>Kanka</td><td>3.24</td><td>1.88</td></tr><tr><td>4</td><td>Fulin</td><td>3.29</td><td>1.91</td></tr></table></div></aside>
+      </section>
     </section>
   </main>
+  <script src="../../core/ui/workspace.js"></script>
 </body>
 </html>

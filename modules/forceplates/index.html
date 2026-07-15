@@ -4,26 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JB ForcePlate</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../../core/theme/tokens.css">
+  <link rel="stylesheet" href="../../core/ui/ui.css">
+  <link rel="stylesheet" href="../../core/ui/workspace.css">
+  <link rel="stylesheet" href="style.css?v=20260714-scale2">
 </head>
-<body>
-  <header>
-    <h1>JB ForcePlate</h1>
-    <input id="endpoint" value="http://192.168.4.1/trace.csv">
-    <button id="loadEndpoint">Load FP</button>
-    <label class="fileButton">
-      Load CSV
-      <input id="fileInput" type="file" accept=".csv,text/csv" multiple>
-    </label>
-    <button id="exportCsv" type="button">Export CSV</button>
-    <button id="resetView" type="button">Reset</button>
-    <span id="status">Ready</span>
+<body data-module="forceplates">
+  <header class="ph-topbar fpTopbar">
+      <a class="ph-home" href="../../index.html" aria-label="Back to hub">JB</a>
+      <div class="ph-title"><small>PerformanceHub</small><strong>ForcePlates</strong></div>
+      <div class="ph-topbar-fill"></div>
+      <input id="endpoint" type="hidden" value="http://192.168.4.1/trace.csv">
+      <div id="connectedDevices" class="connectedDevices disconnected" role="status" aria-live="polite">DISCONNECTED!</div>
+      <span id="status" class="srOnly">Ready</span>
   </header>
 
   <nav class="appTabs" role="tablist" aria-label="ForcePlate workspace">
     <button id="appTabMeasure" class="active" type="button">Measure</button>
     <button id="appTabAnalyze" type="button">Analyze</button>
     <button id="appTabResults" type="button">Results</button>
+    <button id="appTabSettings" type="button">Settings</button>
+    <div class="appTabsFill"></div>
+      <div class="appCacheRow">
+        <div class="cacheStatus" id="cacheStatus">
+          <span id="cacheStatusText">Local cache: checking...</span>
+          <button id="clearSessionCache" type="button">Clear</button>
+        </div>
+      </div>
   </nav>
 
   <main>
@@ -96,19 +103,11 @@
       <div id="measureSplitterControls" class="measureSplitter" role="separator" aria-orientation="vertical"></div>
 
       <aside class="sessionPanel">
-        <div class="measureUtilityBar">
-          <div class="sessionRow sessionApiRow">
-            <label class="fieldGrow">
-              Librarian API
-              <input id="librarianApi" type="text" value="http://100.77.57.39:8787">
-            </label>
-            <button id="syncRoster" type="button">Sync</button>
-          </div>
-          <div class="cacheStatusRow">
-            <div id="cacheStatus" class="cacheStatus">Local cache: checking...</div>
-            <button id="clearSessionCache" type="button">Clear</button>
-          </div>
-        </div>
+        <section class="deviceStatePanel" aria-live="polite">
+          <span>Device State</span>
+          <strong id="deviceState">Ready</strong>
+          <small id="deviceStateDetail">Awaiting measurement</small>
+        </section>
         <div class="sideTabs" role="tablist" aria-label="Measure panel mode">
           <button id="measurePanelTabSession" class="active" type="button">Session</button>
           <button id="measurePanelTabRealtime" type="button">Realtime</button>
@@ -127,7 +126,6 @@
               <button id="sessionStop" type="button">Stop</button>
               <button id="sessionDiscard" type="button">Discard</button>
             </div>
-            <div id="rosterStatus" class="rosterStatus">Roster not loaded</div>
             <div class="sessionRow">
               <label>
                 Athlete
@@ -138,14 +136,19 @@
                 <select id="sessionCategory"></select>
               </label>
             </div>
+            <div class="athleteMassRow">
+              <span id="sessionAthleteMass">Body mass unknown</span>
+              <button id="sessionUpdateAthleteMass" class="hidden" type="button">Update Athlete Profile</button>
+            </div>
             <div class="sessionRow">
               <label>
                 Discipline
                 <select id="measureDiscipline">
+                  <option value="scale">Scale</option>
                   <option value="squat_jump">Squat Jump</option>
                   <option value="countermovement_jump">Countermovement Jump</option>
                   <option value="drop_jump">Drop Jump</option>
-                  <option value="balance">Balance</option>
+                  <option value="eyes_closed_balance">Static Balance</option>
                   <option value="max_force">Max Force</option>
                 </select>
               </label>
@@ -156,13 +159,35 @@
                   cm
                 </span>
               </label>
+              <label id="measureBalanceLegSetting" class="hidden">
+                Stance
+                <select id="measureBalanceLegMode">
+                  <option value="single">Single leg</option>
+                  <option value="both" selected>Both legs</option>
+                </select>
+              </label>
+              <label id="measureBalanceVisionSetting" class="hidden">
+                Vision
+                <select id="measureBalanceVisionMode">
+                  <option value="open">Eyes Open</option>
+                  <option value="closed" selected>Eyes Closed</option>
+                  <option value="paired">Paired EO &#8594; EC</option>
+                </select>
+              </label>
             </div>
             <div class="sessionRow">
-              <label>
+              <label id="measureTraceSetting">
                 Trace
                 <span>
                   <input id="measureTraceWindowMs" type="number" min="1000" max="30000" step="250" value="6000">
                   ms
+                </span>
+              </label>
+              <label id="measureBalanceTimeSetting" class="hidden">
+                Time
+                <span>
+                  <input id="measureBalanceTimeSec" type="number" min="5" max="180" step="1" value="30">
+                  s
                 </span>
               </label>
               <label id="measureWeighingSetting">
@@ -193,7 +218,7 @@
             </div>
             <label>
               Slave stream
-              <input id="slaveEndpoint" type="text" value="http://192.168.4.2/local_realtime.csv">
+              <input id="slaveEndpoint" type="text" value="http://192.168.4.254/local_realtime.csv">
             </label>
             <label>
               Poll
@@ -239,19 +264,52 @@
                 <select id="realtimeCategory"></select>
               </label>
             </div>
+            <div class="athleteMassRow">
+              <span id="realtimeAthleteMass">Body mass unknown</span>
+              <button id="realtimeUpdateAthleteMass" class="hidden" type="button">Update Athlete Profile</button>
+            </div>
             <label>
               Discipline
               <select id="realtimeDiscipline">
+                <option value="scale">Scale</option>
                 <option value="squat_jump">Squat Jump</option>
                 <option value="countermovement_jump">Countermovement Jump</option>
                 <option value="drop_jump">Drop Jump</option>
-                <option value="balance">Balance</option>
+                <option value="eyes_closed_balance">Static Balance</option>
                 <option value="max_force">Max Force</option>
               </select>
+            </label>
+            <label id="realtimeBalanceLegSetting" class="hidden">
+              Stance
+              <select id="realtimeBalanceLegMode">
+                <option value="single">Single leg</option>
+                <option value="both" selected>Both legs</option>
+              </select>
+            </label>
+            <label id="realtimeBalanceVisionSetting" class="hidden">
+              Vision
+              <select id="realtimeBalanceVisionMode">
+                <option value="open">Eyes Open</option>
+                <option value="closed" selected>Eyes Closed</option>
+                <option value="paired">Paired EO &#8594; EC</option>
+              </select>
+            </label>
+            <label id="realtimeBalanceTimeSetting" class="hidden">
+              Time
+              <span>
+                <input id="realtimeBalanceTimeSec" type="number" min="5" max="180" step="1" value="30">
+                s
+              </span>
             </label>
             <div class="realtimeActions">
               <button id="realtimeStart" type="button">START</button>
               <button id="realtimeStop" type="button">STOP</button>
+            </div>
+            <section id="balanceTrialSummary" class="balanceTrialSummary hidden" aria-live="polite"></section>
+            <div id="balanceResultActions" class="balanceResultActions hidden">
+              <button id="balanceAddToSession" type="button">ADD TO SESSION</button>
+              <button id="balanceRetry" type="button">RETRY</button>
+              <button id="balanceDiscard" type="button">DISCARD</button>
             </div>
             <div class="realtimeSegmentList" id="realtimeSegmentList">
               No detected jumps
@@ -297,6 +355,19 @@
             <button id="overlayAsymmetry" type="button">ASYM</button>
             <button id="overlayBodyweight" type="button">xBW</button>
           </div>
+          <div id="balancePlaybackControls" class="balancePlaybackControls hidden" aria-label="Balance playback controls">
+            <button id="balancePlay" class="balancePlay" type="button" title="Play Balance trace">&#9654; PLAY</button>
+            <label class="balanceEffectControl">
+              <span>TRAIL</span>
+              <input id="balanceTrailMs" type="range" min="100" max="30000" step="100" value="2000" aria-label="Motion trail length in milliseconds">
+              <output id="balanceTrailValue" for="balanceTrailMs">2000 ms</output>
+            </label>
+            <label class="balanceEffectControl">
+              <span>FADE</span>
+              <input id="balanceFadeMs" type="range" min="0" max="2000" step="100" value="1000" aria-label="Motion trail fade-off in milliseconds">
+              <output id="balanceFadeValue" for="balanceFadeMs">1000 ms</output>
+            </label>
+          </div>
         </div>
 
         <div class="analyzeActionGroup">
@@ -305,7 +376,7 @@
             <option value="countermovement_jump">Countermovement Jump</option>
             <option value="vertical_jump">Vertical Jump (legacy)</option>
             <option value="drop_jump">Drop Jump</option>
-            <option value="balance">Balance</option>
+            <option value="eyes_closed_balance">Static Balance</option>
             <option value="max_force">Max Force</option>
           </select>
           <button id="detectAll">Detect landmarks</button>
@@ -344,10 +415,13 @@
             </div>
             <canvas id="chart"></canvas>
           </section>
+          <div id="analyzeSplitterMetrics" class="measureSplitter horizontal active" role="separator" aria-orientation="horizontal"></div>
           <section id="metrics" class="metrics"></section>
         </section>
+      </section>
 
-        <aside class="settingsPanel">
+      <div id="analyzeSplitterSettings" class="measureSplitter active" role="separator" aria-orientation="vertical"></div>
+      <aside class="settingsPanel">
           <div class="settingsTabs" role="tablist" aria-label="Side panel">
             <button id="settingsTabTraces" class="active" type="button" aria-label="Session library" title="Session library">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -362,11 +436,18 @@
               </svg>
             </button>
           </div>
-          <div id="traceLibraryPane">
-            <h2>Session library</h2>
-            <button id="loadSessionLibrary" class="libraryLoadButton" type="button">Load Session</button>
-    <input id="sessionLibraryFileInput" type="file" accept=".jbbin,.json,.jbfpbin,application/json,application/octet-stream" multiple hidden>
-            <button id="clearTraceLibrary" type="button">Clear list</button>
+            <div id="traceLibraryPane">
+              <h2>Session library</h2>
+              <button id="loadSessionLibrary" class="libraryLoadButton" type="button">Load Session</button>
+      <input id="sessionLibraryFileInput" type="file" accept=".jbbin,.json,.jbfpbin,application/json,application/octet-stream" multiple hidden>
+              <div class="libraryActionRow">
+                <label class="fileButton libraryFileButton libraryActionButton">
+                  Load CSV
+                  <input id="fileInput" type="file" accept=".csv,text/csv" multiple>
+                </label>
+                <button id="exportCsv" class="libraryActionButton" type="button">Export CSV</button>
+              </div>
+              <button id="clearTraceLibrary" type="button">Clear list</button>
             <div id="traceLibraryList" class="traceLibraryList"></div>
           </div>
           <div id="landmarkSettingsPane" class="hidden">
@@ -435,8 +516,7 @@
               </span>
             </label>
           </div>
-        </aside>
-      </section>
+      </aside>
 
       <details class="debugPanel">
         <summary>Landmark debug</summary>
@@ -459,12 +539,171 @@
         <div id="resultsList" class="resultsList"></div>
       </section>
     </section>
+
+    <section id="deviceSettingsView" class="appView deviceSettingsView">
+      <div class="deviceSettingsHeader">
+        <div>
+          <h2>ForcePlate Settings</h2>
+          <p>Live ADS1256 diagnostics and board maintenance.</p>
+        </div>
+        <div class="deviceConnectionState">
+          <label class="deviceBoardPicker">
+            Board
+            <select id="deviceBoardSelect">
+              <option value="master">AP endpoint</option>
+              <option value="slave">Paired endpoint</option>
+            </select>
+          </label>
+          <span id="deviceConnectionBadge" class="deviceBadge offline">OFFLINE</span>
+          <span id="deviceIdentity">No board data</span>
+          <button id="deviceRefresh" type="button">Refresh</button>
+        </div>
+      </div>
+
+      <div class="deviceSummaryGrid">
+        <article class="deviceMetric"><span>Weight</span><strong id="deviceWeightKg">--</strong><small>kg</small></article>
+        <article class="deviceMetric"><span>SUM</span><strong id="deviceSumCounts">--</strong><small>counts</small></article>
+        <article class="deviceMetric"><span>Frames</span><strong id="deviceFrameHz">--</strong><small>frames/s</small></article>
+        <article class="deviceMetric"><span>Samples</span><strong id="deviceSampleHz">--</strong><small>samples/s total</small></article>
+        <article class="deviceMetric"><span>DRDY timeouts</span><strong id="deviceDrdyTimeouts">--</strong><small>since boot</small></article>
+        <article class="deviceMetric"><span>Calibration</span><strong id="deviceCalibrationState">--</strong><small id="deviceKgPerCount">kg/count --</small></article>
+        <article class="deviceMetric"><span>Measurement filter</span><strong id="deviceFilterState">--</strong><small>all modes / fixed baseline</small></article>
+        <article class="deviceMetric"><span>Noise profile</span><strong id="deviceNoiseState">--</strong><small id="deviceNoiseSummary">run Precision Calibration</small></article>
+      </div>
+
+      <div class="deviceSettingsGrid">
+        <section class="devicePanel deviceDiagnosticsPanel">
+          <div class="panelHeader">
+            <div>
+              <h3>Loadcell diagnostics</h3>
+              <p>Logical corners after the current board mapping.</p>
+            </div>
+            <span id="deviceSequence">sequence --</span>
+          </div>
+          <div class="deviceTableWrap">
+            <table class="deviceDebugTable">
+              <thead>
+                <tr><th>Corner</th><th>Raw ADC</th><th>Tare zero</th><th>Raw delta</th><th>Measurement</th><th>Unfiltered</th><th>Filtered</th><th>Raw σ</th><th>Filtered σ</th><th>Samples/s</th></tr>
+              </thead>
+              <tbody id="deviceChannelRows">
+                <tr><td colspan="10">Waiting for ForcePlate...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="deviceConfigLine">
+            <span id="deviceAdcConfig">ADS1256 --</span>
+            <span id="deviceMeasurementState">Measurement --</span>
+            <span id="deviceUpdatedAt">Updated --</span>
+          </div>
+        </section>
+
+        <section class="devicePanel deviceCalibrationPanel">
+          <div>
+            <h3>Calibration</h3>
+            <p>Precision Calibration waits for the configured electronics warm-up, establishes the force scale and evaluates every static filter preset against the same empty-plate sample. It recommends the fastest preset that reaches the requested noise, but never changes your active selection. The OLED and this panel show the same short instruction at every step.</p>
+          </div>
+          <div class="deviceCalibrationStatus">
+            <span>Current step</span>
+            <strong id="deviceMaintenanceStage">IDLE</strong>
+            <p id="deviceMaintenanceInstruction">Board is ready.</p>
+            <p id="deviceMaintenanceDescription" class="deviceMaintenanceDescription">Select a board, remove everything from it and start when the electronics and platform are settled.</p>
+            <div class="deviceCalibrationProgress" aria-label="Calibration progress">
+              <span id="deviceCalibrationProgressBar"></span>
+            </div>
+            <small id="deviceCalibrationProgressText">Waiting to start</small>
+            <dl>
+              <div><dt>Action</dt><dd id="deviceMaintenanceAction">NONE</dd></div>
+              <div><dt>Known mass</dt><dd id="deviceKnownMass">--</dd></div>
+              <div><dt>Average</dt><dd id="deviceAverageCounts">--</dd></div>
+            </dl>
+          </div>
+          <div class="deviceCalibrationInputs">
+            <label>Calibration mass
+              <span><input id="deviceCalibrationMassKg" type="number" min="0.1" max="500" step="0.01" value="26.75"><small>kg</small></span>
+            </label>
+            <label>Warm-up
+              <span><input id="deviceCalibrationWarmupSec" type="number" min="0" max="1800" step="1" value="0"><small>s</small></span>
+            </label>
+            <label>Noise learning
+              <span><input id="deviceCalibrationNoiseSec" type="number" min="15" max="600" step="1" value="90"><small>s</small></span>
+            </label>
+            <label>Target zero noise
+              <span><input id="deviceCalibrationTargetNoiseG" type="number" min="1" max="250" step="1" value="15"><small>&sigma; g</small></span>
+            </label>
+          </div>
+          <div class="deviceCalibrationSteps">
+            <strong>What will happen</strong>
+            <span>1. Warm-up: if requested, the board waits only for the remaining time since power-up.</span>
+            <span>2. Empty plate: a fresh tare is taken, then every static filter candidate learns from the same full-rate samples.</span>
+            <span>3. Known mass: place the configured mass at the center and keep it completely still.</span>
+            <span>4. Remove mass: the final fixed zero and recommended filter are verified before they are saved.</span>
+            <em>The recommendation never overwrites the active preset selected below. There is no automatic zero tracking, Kalman adaptation or drift correction; later zero movement remains visible and measurable.</em>
+          </div>
+          <div class="deviceActions">
+            <button id="deviceTare" type="button">Tare empty plate</button>
+            <button id="deviceCalibrate" class="primary" type="button">Start Precision Calibration</button>
+          </div>
+          <p id="deviceActionMessage" class="deviceActionMessage"></p>
+        </section>
+      </div>
+
+      <section class="devicePanel deviceFilterPanel">
+        <div class="panelHeader">
+          <div>
+            <h3>Measurement filter diagnostics</h3>
+            <p>Select a fixed test preset and compare calibrated-unfiltered and filtered force from the same samples. The selection is stored independently on each board and remains active when you return to Scale or Realtime. The unity-DC-gain filter suppresses fast analog noise but deliberately leaves slow baseline drift visible.</p>
+          </div>
+          <span id="deviceFilterProfile">No profile loaded</span>
+        </div>
+        <div class="deviceFilterControls">
+          <label>Measurement filter
+            <select id="deviceFilterPreset">
+              <option value="raw">RAW / OFF</option>
+              <option value="0.5">0.5 Hz - Ultra stable</option>
+              <option value="1">1 Hz</option>
+              <option value="2">2 Hz</option>
+              <option value="4">4 Hz</option>
+              <option value="8">8 Hz</option>
+              <option value="12">12 Hz</option>
+              <option value="20">20 Hz</option>
+              <option value="35">35 Hz</option>
+              <option value="60">60 Hz - Ultra fast</option>
+            </select>
+          </label>
+          <label>Diagnostic view
+            <select id="deviceFilterView">
+              <option value="overlay" selected>Overlay</option>
+              <option value="filtered">Filtered</option>
+              <option value="unfiltered">Unfiltered</option>
+              <option value="difference">Difference</option>
+            </select>
+          </label>
+          <button id="deviceFilterClear" type="button">Clear comparison</button>
+        </div>
+        <div class="deviceFilterMetrics">
+          <article><span>Unfiltered noise</span><strong id="deviceRawNoise">--</strong><small>σ, empty plate</small></article>
+          <article><span>Filtered noise</span><strong id="deviceFilteredNoise">--</strong><small>σ, empty plate</small></article>
+          <article><span>Reduction</span><strong id="deviceNoiseReduction">--</strong><small>RMS attenuation</small></article>
+          <article><span>Active preset</span><strong id="deviceActivePreset">--</strong><small>saved on this board</small></article>
+          <article><span>90% response</span><strong id="deviceFilterResponse">--</strong><small>estimated step response</small></article>
+          <article><span>Recommended</span><strong id="deviceRecommendedPreset">--</strong><small>from Precision Calibration</small></article>
+          <article><span>CoP valid above</span><strong id="deviceCopThreshold">--</strong><small>noise-derived gate</small></article>
+          <article><span>Verified zero</span><strong id="deviceVerifiedZero">--</strong><small>after profile</small></article>
+        </div>
+        <div class="deviceFilterChartWrap">
+          <canvas id="deviceFilterChart"></canvas>
+          <div class="deviceFilterLegend"><span class="raw">Unfiltered</span><span class="filtered">Filtered</span><span class="difference">Difference</span></div>
+        </div>
+        <p class="deviceFilterNotice"><strong>Baseline is fixed.</strong> Switching the filter changes measurement filtering only. It never performs auto-zero and never compensates drift.</p>
+      </section>
+    </section>
   </main>
 
+  <script src="../../core/config/config.js"></script>
   <script src="traceEngine.js"></script>
-  <script src="forceplate-models.js"></script>
-  <script src="session-store.js"></script>
+  <script src="forceplate-models.js?v=20260714-scale2"></script>
+  <script src="session-store.js?v=20260714-mass-preflight1"></script>
   <script src="session-archive.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260714-scale2"></script>
 </body>
 </html>

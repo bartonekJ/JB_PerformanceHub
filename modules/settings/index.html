@@ -1,27 +1,95 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>JB PerformanceHub - Settings</title>
-  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../../core/theme/tokens.css">
+  <link rel="stylesheet" href="../../core/ui/ui.css">
+  <link rel="stylesheet" href="../../core/ui/workspace.css">
 </head>
-<body>
-  <main class="hubShell">
-    <header class="hubHeader">
-      <div>
-        <p class="eyebrow">JB PerformanceHub</p>
-        <h1>Settings</h1>
-      </div>
-      <a class="hubStatus" href="../../index.html">Back to hub</a>
-    </header>
-    <section class="moduleTile">
-      <span class="moduleIcon">...</span>
-      <span>
-        <strong>Device and app settings placeholder</strong>
-        <small>This section will be wired after the ForcePlate module migration settles.</small>
-      </span>
+<body data-module="settings">
+<main class="ph-app">
+  <header class="ph-topbar">
+    <a class="ph-home" href="../../index.html">JB</a>
+    <div class="ph-title"><small>PerformanceHub</small><strong>Settings</strong></div>
+    <div class="ph-topbar-fill"></div>
+    <div id="librarianConnectionStatus" class="ph-connection offline">Librarian not checked</div>
+    <button id="systemRefresh" type="button">System status</button>
+  </header>
+  <nav class="ph-tabs">
+    <button class="ph-tab jb-tab-01 active" data-ph-tab="librarian" type="button">Librarian</button>
+    <button class="ph-tab jb-tab-01" data-ph-tab="display" type="button">Display</button>
+    <button class="ph-tab jb-tab-01" data-ph-tab="devices" type="button">Devices</button>
+  </nav>
+  <section class="ph-workspace">
+    <section class="ph-page ph-layout-config active" data-ph-page="librarian">
+      <article class="ph-panel">
+        <header class="ph-panel-header"><h2>Roster Editor</h2><span class="ph-fill"></span><small id="rosterCount">No roster loaded</small></header>
+        <form id="athleteForm" class="ph-inline-editor">
+          <input id="athleteFirstName" required placeholder="First name">
+          <input id="athleteLastName" required placeholder="Last name">
+          <input id="athleteDisplayName" placeholder="Display name">
+          <select id="athleteCategory"><option value="">No category</option></select>
+          <input id="athleteJersey" placeholder="Jersey #">
+          <input id="athleteBodyMass" type="number" min="10" max="300" step="0.1" placeholder="Body mass kg">
+          <input id="athletePhotoId" placeholder="Photo ID">
+          <button id="athleteSubmit" class="active" type="submit">ADD ATHLETE</button>
+          <button id="athleteCancelEdit" class="hidden" type="button">CANCEL</button>
+        </form>
+        <div class="ph-command-bar">
+          <select id="rosterCategoryFilter"><option value="">All categories</option></select>
+          <input id="rosterSearch" placeholder="Search roster">
+          <span class="ph-fill"></span>
+          <button id="refreshRoster" type="button">Refresh</button>
+        </div>
+        <div class="ph-panel-body">
+          <table class="ph-table"><thead><tr><th>ID</th><th>Display</th><th>Name</th><th>Category</th><th>Jersey</th><th>Body mass</th><th></th></tr></thead><tbody id="athleteTableBody"></tbody></table>
+          <div id="rosterEmpty" class="ph-empty">Connect to Librarian to load athletes.</div>
+        </div>
+      </article>
+      <aside class="ph-stack">
+        <article class="ph-panel">
+          <header class="ph-panel-header"><h2>Connection</h2></header>
+          <div class="ph-panel-body ph-form-grid">
+            <label class="ph-field wide">Librarian API<input id="librarianApiInput" value="http://100.77.57.39:8787"></label>
+            <label class="ph-field wide">Local results<input id="localResultsPath" value="Data/Results"></label>
+            <div id="librarianDetail" class="ph-callout ph-field wide"><strong>Not checked</strong><small>Use Connect to verify the service.</small></div>
+          </div>
+          <div class="ph-panel-actions"><button id="connectLibrarian" class="active" type="button">CONNECT</button></div>
+        </article>
+        <article class="ph-panel">
+          <header class="ph-panel-header"><h2>Categories</h2><span class="ph-fill"></span><small id="categoryCount">0</small></header>
+          <form id="categoryForm" class="ph-inline-editor compact"><input id="categoryName" required placeholder="New category"><button class="active" type="submit">ADD</button></form>
+          <div id="categoryList" class="ph-panel-body ph-list"></div>
+        </article>
+      </aside>
+      <article class="ph-panel">
+        <header class="ph-panel-header"><h2>Metric Registry</h2><span class="ph-fill"></span><button type="button">Add metric</button></header>
+        <div class="ph-panel-body"><table class="ph-table"><tr><th>Metric</th><th>Source</th><th>Unit</th><th>Public name</th></tr><tr><td>jump_height_tov</td><td>ForcePlates</td><td>cm</td><td>ToV Jump Height</td></tr><tr><td>sprint_20m</td><td>TimingGates</td><td>s</td><td>20 m Sprint</td></tr><tr><td>reaction_mean</td><td>Reaction Pucks</td><td>ms</td><td>Mean Reaction Time</td></tr></table></div>
+      </article>
+      <aside class="ph-panel">
+        <header class="ph-panel-header"><h2>Firmware Deploy</h2></header>
+        <div class="ph-panel-body ph-stack"><label class="ph-field">Target<select><option>ForcePlates pair</option><option>TimingGates nodes</option><option>Reaction Pucks</option></select></label><label class="ph-field">Package<select><option>Stable 0.8.4</option><option>Bring-up 0.9.0</option></select></label><div class="ph-callout"><strong>Placeholder</strong><small>Deployment transport is not connected yet.</small></div></div>
+        <div class="ph-panel-actions"><button type="button">VALIDATE</button><button type="button">DEPLOY</button></div>
+      </aside>
     </section>
-  </main>
+
+    <section class="ph-page ph-layout-config" data-ph-page="display">
+      <article class="ph-panel"><header class="ph-panel-header"><h2>Interface Theme</h2><span class="ph-fill"></span><button type="button">Restore defaults</button></header><div class="ph-panel-body"><h3 class="ph-section-title">Shared palette</h3><div class="ph-swatch-row"><label class="ph-swatch"><input type="color" value="#ff9309"><span><strong>Primary</strong><small class="jb-muted">Active states and primary actions</small></span></label><label class="ph-swatch"><input type="color" value="#8fdb00"><span><strong>Secondary</strong><small class="jb-muted">Positive status and comparison</small></span></label><label class="ph-swatch"><input type="color" value="#1d1d1c"><span><strong>Application</strong><small class="jb-muted">Global background</small></span></label><label class="ph-swatch"><input type="color" value="#2f2f2c"><span><strong>Panel</strong><small class="jb-muted">Workspace surfaces</small></span></label></div><h3 class="ph-section-title ph-section-gap">Component scale</h3><div class="ph-form-grid"><label class="ph-field">UI font<select><option>Trebuchet MS</option></select></label><label class="ph-field">Density<select><option>Compact</option><option>Comfortable</option><option>Touch</option></select></label><label class="ph-field">Tab style<select><option>Tab 01</option></select></label><label class="ph-field">Card radius<select><option>8 px</option><option>4 px</option><option>Square</option></select></label></div></div><div class="ph-panel-actions"><button class="active" type="button">APPLY THEME</button></div></article>
+      <aside class="ph-panel"><header class="ph-panel-header"><h2>Live Preview</h2></header><div class="ph-panel-body ph-stack"><div class="ph-panel"><header class="ph-panel-header"><h2>Panel Header</h2></header><div class="ph-panel-body"><div class="ph-metrics metric-two"><div class="ph-metric"><small>Metric</small><strong>34.8</strong></div><div class="ph-metric"><small>Status</small><strong>Ready</strong></div></div></div><div class="ph-panel-actions"><button type="button">SECONDARY</button><button class="active" type="button">PRIMARY</button></div></div></div></aside>
+      <article class="ph-panel"><header class="ph-panel-header"><h2>Module Overrides</h2><span class="ph-fill"></span><small>Disabled by default</small></header><div class="ph-panel-body"><table class="ph-table"><tr><th>Module</th><th>Primary</th><th>Secondary</th><th>Use override</th></tr><tr><td>ForcePlates</td><td>#ff9309</td><td>#8fdb00</td><td><input type="checkbox"></td></tr><tr><td>TimingGates</td><td>#ff9309</td><td>#8fdb00</td><td><input type="checkbox"></td></tr><tr><td>Reaction Pucks</td><td>#ff9309</td><td>#8fdb00</td><td><input type="checkbox"></td></tr></table></div></article>
+      <aside class="ph-panel"><header class="ph-panel-header"><h2>Accessibility</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Contrast<select><option>Standard</option><option>High contrast</option></select></label><label class="ph-field wide">Motion<select><option>Reduced</option><option>Full</option></select></label></div></aside>
+    </section>
+
+    <section class="ph-page ph-layout-operational" data-ph-page="devices">
+      <article class="ph-panel"><header class="ph-panel-header"><h2>Device Registry</h2><span class="ph-fill"></span><button type="button">Discover</button></header><div class="ph-command-bar"><select><option>All modules</option><option>ForcePlates</option><option>TimingGates</option></select><input placeholder="Search device"></div><div class="ph-panel-body ph-device-grid"><div class="ph-device"><i class="ph-device-state"></i><strong>ForcePlate Left</strong><small>192.168.4.1 | FW 0.8.4</small></div><div class="ph-device"><i class="ph-device-state"></i><strong>ForcePlate Right</strong><small>192.168.4.2 | FW 0.8.4</small></div><div class="ph-device"><i class="ph-device-state"></i><strong>TG Receiver 1</strong><small>Battery 86% | FW 1.2.1</small></div><div class="ph-device"><i class="ph-device-state"></i><strong>TG Emitter 1</strong><small>Battery 91% | FW 1.2.1</small></div></div></article>
+      <aside class="ph-stack"><article class="ph-panel"><header class="ph-panel-header"><h2>Selected Device</h2></header><div class="ph-panel-body ph-form-grid"><label class="ph-field wide">Name<input value="ForcePlate Left"></label><label class="ph-field wide">Role<select><option>Left plate</option><option>Right plate</option></select></label><label class="ph-field wide">Update channel<select><option>Stable</option><option>Bring-up</option></select></label></div><div class="ph-panel-actions"><button type="button">SAVE</button></div></article><article class="ph-panel"><header class="ph-panel-header"><h2>Health</h2></header><div class="ph-panel-body ph-stack"><div class="ph-callout"><strong>Online</strong><small>Last seen 2 seconds ago</small></div><div class="ph-metric"><small>Calibration age</small><strong>12 days</strong></div></div></article></aside>
+    </section>
+  </section>
+</main>
+<script src="../../core/config/config.js"></script>
+<script src="../../core/ui/workspace.js"></script>
+<script src="settings.js?v=20260714-athlete-edit1"></script>
 </body>
 </html>
