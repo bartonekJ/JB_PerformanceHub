@@ -220,6 +220,11 @@ const ActivePresetStorageKey = 'jb-forceplate-analyzer-active-preset';
 const MeasureLayoutStorageKey = 'jb-forceplate-measure-layout';
 const AnalyzeLayoutStorageKey = 'jb-forceplate-analyze-layout';
 const GravityMs2 = 9.80665;
+const BalanceSingleReadyMinMs = 1000;
+const BalanceSingleReadyMaxMs = 3000;
+const BalanceSingleReadyWindowMs = 1200;
+const BalanceSingleReadyStdKg = 0.75;
+const BalanceSingleReadyRangeKg = 3.0;
 const SessionTraceBinaryMagic = 'JBFPTR1\n';
 const JbBinaryPackageMagic = 'JBBIN01\n';
 const SessionTraceBinaryColumns = ['left_net_n', 'right_net_n', 'total_net_n', 'left_abs_n', 'right_abs_n', 'total_abs_n'];
@@ -6178,6 +6183,7 @@ async function waitForBalanceReady(abort, snapshot, {
 } = {}) {
   const trial = state.realtime.balanceTrial;
   let stableChecks = 0;
+  let singleReadyStartedMs = NaN;
   let oledPhase = '';
   while (state.realtime.live && !abort.signal.aborted) {
     const now = latestBalanceBoardTimeMs();
@@ -6203,6 +6209,7 @@ async function waitForBalanceReady(abort, snapshot, {
 
     if (!loaded) {
       stableChecks = 0;
+      singleReadyStartedMs = NaN;
       trial.phase = 'step';
       trial.activeSide = '';
       trial.message = single
@@ -6219,14 +6226,27 @@ async function waitForBalanceReady(abort, snapshot, {
     } else {
       trial.phase = 'still';
       trial.activeSide = single ? activeSide : 'both';
+      if (single && !Number.isFinite(singleReadyStartedMs)) {
+        singleReadyStartedMs = now;
+      }
       const source = single
         ? (activeSide === 'right' ? state.realtime.rightSamples : state.realtime.leftSamples)
         : state.realtime.samples;
-      const recent = source.filter((sample) => now - sample.tMs <= 1400)
-        .map((sample) => single ? Math.max(0, sample.value || 0) : Math.max(0, sample.total || 0))
-        .filter((value) => value >= 10 * GravityMs2);
-      const durationMs = source.length > 1
-        ? Math.max(0, now - source.find((sample) => now - sample.tMs <= 1400)?.tMs)
+      const readyWindowMs = single ? BalanceSingleReadyWindowMs : 1400;
+      const readyWindowStartMs = single
+        ? Math.max(singleReadyStartedMs, now - readyWindowMs)
+        : now - readyWindowMs;
+      const recentSamples = source.filter((sample) => {
+        const value = single
+          ? Math.max(0, sample.value || 0)
+          : Math.max(0, sample.total || 0);
+        return sample.tMs >= readyWindowStartMs && value >= 10 * GravityMs2;
+      });
+      const recent = recentSamples.map((sample) => single
+        ? Math.max(0, sample.value || 0)
+        : Math.max(0, sample.total || 0));
+      const durationMs = recentSamples.length > 1
+        ? Math.max(0, recentSamples.at(-1).tMs - recentSamples[0].tMs)
         : 0;
       const meanN = recent.length
         ? recent.reduce((sum, value) => sum + value, 0) / recent.length
@@ -6238,18 +6258,37 @@ async function waitForBalanceReady(abort, snapshot, {
       const rangeKg = recent.length
         ? (Math.max(...recent) - Math.min(...recent)) / GravityMs2
         : Infinity;
-      const stable = recent.length >= 80 && durationMs >= 1100 && stdKg <= 0.35 && rangeKg <= 1.20;
+      const stable = recent.length >= 80 &&
+        durationMs >= (single ? BalanceSingleReadyMinMs : 1100) &&
+        stdKg <= (single ? BalanceSingleReadyStdKg : 0.35) &&
+        rangeKg <= (single ? BalanceSingleReadyRangeKg : 1.20);
       stableChecks = stable ? stableChecks + 1 : 0;
-      trial.message = stable
-        ? transition ? 'Eyes closed · stable start detected' : 'Stable start detected'
-        : transition
-          ? `Close eyes · stand still · σ ${Number.isFinite(stdKg) ? stdKg.toFixed(2) : '--'} kg`
-          : `Stand still · stability σ ${Number.isFinite(stdKg) ? stdKg.toFixed(2) : '--'} kg`;
+      if (single) {
+        const readyElapsedMs = Math.max(0, now - singleReadyStartedMs);
+        const readyAfterMin = readyElapsedMs >= BalanceSingleReadyMinMs && stable;
+        const readyAtDeadline = readyElapsedMs >= BalanceSingleReadyMaxMs;
+        const remainingSec = Math.max(
+          0,
+          Math.ceil((BalanceSingleReadyMaxMs - readyElapsedMs) / 1000),
+        );
+        trial.message = transition
+          ? `Close eyes · hold position · start in ${remainingSec}s max`
+          : `Hold position · start in ${remainingSec}s max`;
+        if (readyAfterMin || readyAtDeadline) {
+          return { activeSide };
+        }
+      } else {
+        trial.message = stable
+          ? transition ? 'Eyes closed · stable start detected' : 'Stable start detected'
+          : transition
+            ? `Close eyes · stand still · σ ${Number.isFinite(stdKg) ? stdKg.toFixed(2) : '--'} kg`
+            : `Stand still · stability σ ${Number.isFinite(stdKg) ? stdKg.toFixed(2) : '--'} kg`;
+      }
       if (oledPhase !== 'still') {
         oledPhase = 'still';
         setOledBalanceUi('still', { visionMode }).catch(() => {});
       }
-      if (stableChecks >= 3) return { activeSide: single ? activeSide : 'both' };
+      if (!single && stableChecks >= 3) return { activeSide: 'both' };
     }
     drawRealtime();
     await abortableDelay(100, abort);
