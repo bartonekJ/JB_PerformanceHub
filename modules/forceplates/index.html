@@ -2,12 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d1d1c">
   <title>JB ForcePlate</title>
+  <script>
+    if (new URLSearchParams(window.location.search).get('mobile') === '1') document.documentElement.classList.add('fpMobileApp');
+  </script>
   <link rel="stylesheet" href="../../core/theme/tokens.css">
   <link rel="stylesheet" href="../../core/ui/ui.css">
   <link rel="stylesheet" href="../../core/ui/workspace.css">
-  <link rel="stylesheet" href="style.css?v=20260714-scale2">
+  <link rel="stylesheet" href="style.css?v=20260715-offline1">
+  <link rel="stylesheet" href="mobile.css?v=20260715-mobile1">
+  <link rel="stylesheet" href="mobile-layout.css?v=20260715-layout11">
 </head>
 <body data-module="forceplates">
   <header class="ph-topbar fpTopbar">
@@ -703,8 +709,9 @@
   <script src="../../core/config/config.js"></script>
   <script src="traceEngine.js"></script>
   <script src="forceplate-models.js?v=20260714-scale2"></script>
-  <script src="session-store.js?v=20260714-mass-preflight1"></script>
+  <script src="session-store.js?v=20260715-native-store1"></script>
   <script src="session-archive.js"></script>
-  <script src="app.js?v=20260714-scale2"></script>
+  <script src="app.js?v=20260715-results-picker2"></script>
+  <script src="mobile-layout.js?v=20260715-layout11"></script>
 </body>
 </html>

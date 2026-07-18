@@ -1619,6 +1619,10 @@ body.resizingMeasureVertical * {
   color: var(--text);
 }
 
+.traceItemMobileLine {
+  display: none;
+}
+
 .traceItemName {
   font-size: 14px;
   font-weight: 700;

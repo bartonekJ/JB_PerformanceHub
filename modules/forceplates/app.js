@@ -1,6 +1,31 @@
+const ForcePlateMobileMode = new URLSearchParams(window.location.search).get('mobile') === '1';
+const ForcePlateNativeWindows = window.JBPerformanceHubNative?.platform === 'windows';
+const ForcePlatePersistentRealtime = ForcePlateMobileMode || ForcePlateNativeWindows;
+const ForcePlateNativeAndroid = Boolean(window.JBForcePlateAndroid);
+const ForcePlateNativeResults = ForcePlateNativeWindows || ForcePlateNativeAndroid;
+const RealtimeBatchRequestSamples = 96;
+const RealtimeMobileStreamPort = 8081;
+const NativeResultsRequests = new Map();
+let NativeResultsRequestId = 0;
+let PendingNativeResultsAction = '';
+
+if (ForcePlateNativeWindows && window.chrome?.webview) {
+  window.chrome.webview.addEventListener('message', (event) => {
+    const message = event.data;
+    if (message?.type !== 'performancehub.results.response' || !message.requestId) return;
+    const pending = NativeResultsRequests.get(message.requestId);
+    if (!pending) return;
+    NativeResultsRequests.delete(message.requestId);
+    clearTimeout(pending.timeout);
+    if (message.ok) pending.resolve(message.result || {});
+    else pending.reject(new Error(message.error || 'Native Results operation failed'));
+  });
+}
+
 const state = {
   rows: [],
   source: '',
+  clockSync: null,
   viewMode: 'total',
   forceMode: 'net',
   discipline: 'squat_jump',
@@ -27,6 +52,7 @@ const state = {
   chartStyle: null,
   focusEnabled: true,
   focusWindow: null,
+  sessionPreviewViewOverride: null,
   selectedLandmark: null,
   balanceAnalyze: {
     playing: false,
@@ -77,6 +103,15 @@ const state = {
     samples: [],
     leftSamples: [],
     rightSamples: [],
+    merge: {
+      pending: [[], []],
+      latestTMs: [NaN, NaN],
+      arrivalMs: [0, 0],
+      values: [NaN, NaN],
+      dual: false,
+      singleBoardAfterMs: 0,
+      lastTMs: -Infinity,
+    },
     balanceGlobalSamples: [],
     balanceLoad: [
       { loaded: false, belowCount: 0, segmentId: 0 },
@@ -115,6 +150,7 @@ const state = {
       cursorMs: 0,
       raf: 0,
       lastFrameMs: 0,
+      lastDrawMs: 0,
     },
     historyMs: 10 * 60 * 1000,
     warmupUntilMs: 0,
@@ -1122,15 +1158,40 @@ async function refreshRosterFromLibrarian() {
   const sessionStore = window.JBForcePlateSessionStore;
   const librarianApi = sessionStore.readLibrarianApi();
   const directory = await sessionStore.loadDirectory(librarianApi);
-  state.session.athletes = directory.athletes;
-  state.session.categories = directory.categories;
-  state.session.rosterSource = directory.source;
-  state.session.rosterMessage = directory.message;
-  if (!directory.athletes.some((athlete) => String(athlete.athleteId) === String(state.session.currentAthleteId))) {
-    state.session.currentAthleteId = directory.athletes[0]?.athleteId ?? 0;
+  const cachedAthletes = (state.session.athletes || []).filter((athlete) => Number(athlete.athleteId) > 0);
+  const cachedCategories = state.session.categories || [];
+  if (directory.source === 'librarian') {
+    const athletesById = new Map(cachedAthletes.map((athlete) => [String(athlete.athleteId), athlete]));
+    directory.athletes.forEach((athlete) => athletesById.set(String(athlete.athleteId), athlete));
+    const categoriesById = new Map(cachedCategories.map((category) => [
+      String(category.categoryId || category.displayName || category.name),
+      category,
+    ]));
+    directory.categories.forEach((category) => categoriesById.set(
+      String(category.categoryId || category.displayName || category.name),
+      category,
+    ));
+    state.session.athletes = [...athletesById.values()];
+    state.session.categories = [...categoriesById.values()];
+    state.session.rosterSource = 'librarian';
+    state.session.rosterUpdatedAt = Date.now();
+    state.session.rosterMessage = `Librarian: ${state.session.athletes.length} athletes, ${state.session.categories.length} categories`;
+  } else if (cachedAthletes.length) {
+    state.session.athletes = cachedAthletes;
+    state.session.categories = cachedCategories;
+    state.session.rosterSource = 'cache';
+    state.session.rosterMessage = `Offline cache: ${cachedAthletes.length} athletes (${directory.message})`;
+  } else {
+    state.session.athletes = directory.athletes;
+    state.session.categories = directory.categories;
+    state.session.rosterSource = directory.source;
+    state.session.rosterMessage = directory.message;
+  }
+  if (!state.session.athletes.some((athlete) => String(athlete.athleteId) === String(state.session.currentAthleteId))) {
+    state.session.currentAthleteId = state.session.athletes[0]?.athleteId ?? 0;
   }
   if (state.session.session.category) {
-    const validCategories = sessionStore.categories(directory.athletes, directory.categories);
+    const validCategories = sessionStore.categories(state.session.athletes, state.session.categories);
     if (!validCategories.includes(state.session.session.category)) {
       state.session.session.category = '';
     }
@@ -1138,7 +1199,14 @@ async function refreshRosterFromLibrarian() {
   sessionStore.writeStoredState(state.session);
   renderSessionControls();
   renderSessionStats();
-  return directory;
+  return {
+    ...directory,
+    athletes: state.session.athletes,
+    categories: state.session.categories,
+    source: state.session.rosterSource,
+    message: state.session.rosterMessage,
+    updatedAt: state.session.rosterUpdatedAt,
+  };
 }
 
 function currentSessionPackage() {
@@ -1188,6 +1256,7 @@ function rawTracePayload() {
     rowCount: state.rows.length,
     firstMs: state.rows[0]?.t_ms ?? 0,
     lastMs: state.rows.at(-1)?.t_ms ?? 0,
+    clockSync: state.clockSync ? { ...state.clockSync } : null,
     rows: state.rows.map((row) => ({ ...row })),
   };
 }
@@ -1217,6 +1286,7 @@ function rawTraceFromRowsMeta(rows, meta = {}) {
     traceHash: meta.traceHash || '',
     resultId: meta.resultId || '',
     fileName: meta.fileName || '',
+    clockSync: meta.clockSync || null,
     rows,
   };
 }
@@ -1236,6 +1306,7 @@ function encodeSessionTraceBinary(rawTrace, result = {}) {
     lastMs: rawTrace.lastMs ?? rows.at(-1)?.t_ms ?? 0,
     columns,
     landmarks: traceLandmarkHeader(rawTrace),
+    clockSync: rawTrace.clockSync || null,
     traceId: traceIdValue,
     fileName: result.traceRef?.fileName || traceFileName(traceIdValue),
     resultId: result.resultId || '',
@@ -1439,6 +1510,7 @@ async function saveCurrentTraceResult() {
       firstMs: rawTrace.firstMs,
       lastMs: rawTrace.lastMs,
       sampleIntervalMs: rawTrace.sampleIntervalMs,
+      clockSync: rawTrace.clockSync ? { ...rawTrace.clockSync } : null,
     },
     metrics,
     landmarks: currentLandmarkSnapshot(),
@@ -1488,7 +1560,59 @@ function exportFileName(sessionPackage) {
   return `JBFP_${date}_${name}_${session.sessionId}.json`;
 }
 
-function downloadBlob(blob, fileName) {
+function windowsNativeResultsRequest(type, payload = {}) {
+  if (!ForcePlateNativeWindows || !window.chrome?.webview) {
+    return Promise.reject(new Error('Windows Results bridge is unavailable'));
+  }
+  const requestId = `results-${Date.now()}-${++NativeResultsRequestId}`;
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      NativeResultsRequests.delete(requestId);
+      reject(new Error('Native Results operation timed out'));
+    }, 30000);
+    NativeResultsRequests.set(requestId, { resolve, reject, timeout });
+    window.chrome.webview.postMessage({ type, requestId, ...payload });
+  });
+}
+
+function blobBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      const dataUrl = String(reader.result || '');
+      const separator = dataUrl.indexOf(',');
+      if (separator < 0) {
+        reject(new Error('Cannot encode export payload'));
+        return;
+      }
+      resolve(dataUrl.slice(separator + 1));
+    });
+    reader.addEventListener('error', () => reject(reader.error || new Error('Cannot read export payload')));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function downloadBlob(blob, fileName) {
+  if (ForcePlateNativeWindows) {
+    await windowsNativeResultsRequest('performancehub.results.save', {
+      fileName,
+      mimeType: blob.type || 'application/octet-stream',
+      base64: await blobBase64(blob),
+    });
+    setStatus(`Saved to Results: ${fileName}`);
+    return 'saved';
+  }
+  if (window.JBForcePlateAndroid && typeof window.JBForcePlateAndroid.saveBase64 === 'function') {
+    const outcome = window.JBForcePlateAndroid.saveBase64(
+        fileName,
+        blob.type || 'application/octet-stream',
+        await blobBase64(blob),
+    );
+    setStatus(outcome === 'folder_required'
+      ? 'Choose a folder once; PerformanceHub will create JB PerformanceHub/Results inside it'
+      : `Saved to Results: ${fileName}`);
+    return outcome || 'saved';
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -1497,6 +1621,7 @@ function downloadBlob(blob, fileName) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+  return 'downloaded';
 }
 
 function exportableSessionPackage(sessionPackage) {
@@ -1654,7 +1779,7 @@ async function exportTraceBinaryFiles(sessionPackage) {
     const traceId = result.traceRef?.traceId || result.traceHash || result.resultId;
     const fileName = result.traceRef?.fileName || traceFileName(traceId);
     const { blob } = encodeSessionTraceBinary(rawTrace, result);
-    downloadBlob(blob, fileName);
+    await downloadBlob(blob, fileName);
     exported += 1;
   }
   return exported;
@@ -1680,11 +1805,13 @@ async function exportCurrentSessionPackage() {
   state.session.results = exportedPackage.results;
   window.JBForcePlateSessionStore.writeStoredState(state.session);
   const jbPackage = await encodeJbBinaryPackage(exportedPackage);
-  downloadBlob(jbPackage.blob, jbPackage.fileName);
+  const exportOutcome = await downloadBlob(jbPackage.blob, jbPackage.fileName);
   await updateCacheStatus();
   await loadResultsSources();
-  setStatus(`Session export prepared: ${jbPackage.fileName} (${jbPackage.manifest.traces.length} trace block(s))`);
-  return true;
+  if (exportOutcome !== 'folder_required') {
+    setStatus(`${ForcePlateNativeResults ? 'Session saved' : 'Session export prepared'}: ${jbPackage.fileName} (${jbPackage.manifest.traces.length} trace block(s))`);
+  }
+  return exportOutcome;
 }
 
 function realtimeExportFileBase() {
@@ -1920,8 +2047,10 @@ async function exportSelectedRealtimeSegments() {
     return true;
   }
   const jbPackage = await encodeJbBinaryPackage(sessionPackage, { name: fileBase });
-  downloadBlob(jbPackage.blob, jbPackage.fileName);
-  setStatus(`Realtime export prepared: ${sessionPackage.results.length} jump(s), ${exportedTraceCount} trace block(s)`);
+  const exportOutcome = await downloadBlob(jbPackage.blob, jbPackage.fileName);
+  if (exportOutcome !== 'folder_required') {
+    setStatus(`${ForcePlateNativeResults ? 'Realtime saved' : 'Realtime export prepared'}: ${sessionPackage.results.length} jump(s), ${exportedTraceCount} trace block(s)`);
+  }
   return true;
 }
 
@@ -2184,7 +2313,72 @@ async function loadResultsSources() {
   renderResultsOptions();
 }
 
-async function parseResultsFiles(files, folderName = '') {
+async function nativeResultsFiles({ requestFolder = false, pendingAction = '', pick = false } = {}) {
+  if (!ForcePlateNativeResults) return { files: [], folderName: '' };
+  let listing;
+  if (ForcePlateNativeWindows) {
+    listing = await windowsNativeResultsRequest(pick
+      ? 'performancehub.results.pick'
+      : 'performancehub.results.list');
+  } else {
+    const rawListing = window.JBForcePlateAndroid.listResults();
+    listing = JSON.parse(rawListing || '{}');
+  }
+
+  if (listing.needsFolder) {
+    if (requestFolder && typeof window.JBForcePlateAndroid?.chooseResultsFolder === 'function') {
+      PendingNativeResultsAction = pendingAction;
+      window.JBForcePlateAndroid.chooseResultsFolder();
+    }
+    return { files: [], folderName: listing.folderName || 'Results', needsFolder: true };
+  }
+
+  const files = [];
+  for (const descriptor of listing.files || []) {
+    try {
+      const response = await fetch(descriptor.url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      files.push(new File([blob], descriptor.name, {
+        type: descriptor.mimeType || blob.type || 'application/octet-stream',
+        lastModified: Number(descriptor.lastModified) || Date.now(),
+      }));
+    } catch (error) {
+      console.warn(`Skipping native Results file ${descriptor.name}: ${error.message}`);
+    }
+  }
+  return {
+    files,
+    folderName: listing.folderName || 'Results',
+    needsFolder: false,
+    cancelled: Boolean(listing.cancelled),
+  };
+}
+
+async function refreshNativeResultsFolder({ requestFolder = false, quiet = false } = {}) {
+  if (!ForcePlateNativeResults) {
+    await loadResultsSources();
+    return;
+  }
+  const native = await nativeResultsFiles({ requestFolder, pendingAction: 'results' });
+  if (native.needsFolder) {
+    await loadResultsSources();
+    return;
+  }
+  await parseResultsFiles(native.files, native.folderName, { quiet });
+}
+
+window.JBForcePlateResultsFolderChanged = () => {
+  const pendingAction = PendingNativeResultsAction;
+  PendingNativeResultsAction = '';
+  if (pendingAction === 'analyze') {
+    loadSessionLibrary().catch((error) => setStatus(`Session library error: ${error.message}`));
+    return;
+  }
+  refreshNativeResultsFolder().catch((error) => setStatus(`Results folder error: ${error.message}`));
+};
+
+async function parseResultsFiles(files, folderName = '', options = {}) {
   const loaded = [];
   for (const file of files) {
     const lowerName = file.name.toLowerCase();
@@ -2218,10 +2412,21 @@ async function parseResultsFiles(files, folderName = '') {
   state.results.folderPackages = loaded;
   state.results.folderName = folderName;
   await loadResultsSources();
-  setStatus(loaded.length ? `Loaded ${loaded.length} session file(s) from results folder` : 'No ForcePlate session files found in selected folder');
+  if (!options.quiet) {
+    setStatus(loaded.length ? `Loaded ${loaded.length} session file(s) from results folder` : 'No ForcePlate session files found in selected folder');
+  }
 }
 
 async function pickResultsFolder() {
+  if (ForcePlateNativeWindows) {
+    await refreshNativeResultsFolder();
+    return;
+  }
+  if (ForcePlateNativeAndroid && typeof window.JBForcePlateAndroid.chooseResultsFolder === 'function') {
+    PendingNativeResultsAction = 'results';
+    window.JBForcePlateAndroid.chooseResultsFolder();
+    return;
+  }
   if (window.showDirectoryPicker) {
     try {
       const directory = await window.showDirectoryPicker();
@@ -2387,7 +2592,7 @@ function setAppTab(tab) {
       drawRealtime();
     }
   } else if (tab === 'results') {
-    loadResultsSources().catch((error) => setStatus(`Results load error: ${error.message}`));
+    refreshNativeResultsFolder({ quiet: true }).catch((error) => setStatus(`Results load error: ${error.message}`));
   }
 }
 
@@ -2405,21 +2610,15 @@ function rowsToCsv(rows) {
   return `${lines.join('\n')}\n`;
 }
 
-function exportCurrentCsv() {
+async function exportCurrentCsv() {
   if (!state.rows.length) {
     setStatus('No trace to export');
     return;
   }
   const blob = new Blob([rowsToCsv(state.rows)], { type: 'text/csv;charset=utf-8' });
-  const link = document.createElement('a');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  link.href = URL.createObjectURL(blob);
-  link.download = `forceplate_trace_${timestamp}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(link.href);
-  setStatus('CSV exported');
+  const exportOutcome = await downloadBlob(blob, `forceplate_trace_${timestamp}.csv`);
+  if (exportOutcome !== 'folder_required') setStatus('CSV exported');
 }
 
 function savedPresets() {
@@ -2579,6 +2778,18 @@ function decodeFwTraceBinary(buffer) {
     landmarkOffset += 2;
   });
 
+  const version = view.getUint8(28);
+  const clockSync = version >= 2 && headerSize >= minHeaderSize + 12
+    ? {
+        method: 'espnow-sequential-ntp-median',
+        valid: view.getUint8(minHeaderSize + 9) !== 0,
+        slaveMinusMasterUs: view.getInt32(minHeaderSize, true),
+        roundTripUs: view.getUint32(minHeaderSize + 4, true),
+        validSamples: view.getUint8(minHeaderSize + 8),
+        sampleAlignmentApplied: false,
+      }
+    : null;
+
   const rows = [];
   for (let i = 0; i < sampleCount; i++) {
     const offset = headerSize + i * sampleSize;
@@ -2601,7 +2812,7 @@ function decodeFwTraceBinary(buffer) {
     };
     rows.push(row);
   }
-  return { rows, discipline };
+  return { rows, discipline, clockSync };
 }
 
 function traceId() {
@@ -2641,10 +2852,30 @@ function renderTraceLibrary() {
     const attemptCode = settings.attemptCode || settings.attemptLabel || '';
     const ftHeight = finite(settings.flightHeightCm) ? `${settings.flightHeightCm.toFixed(1)} cm` : '';
     const balanceDetail = disciplineId === 'eyes_closed_balance' ? balanceResultDescriptor(result) : '';
+    const mobileBalanceDetail = disciplineId === 'eyes_closed_balance'
+      ? [
+        normalizeBalanceVisionMode(settings.visionMode) === 'closed' ? 'EC' : 'EO',
+        settings.legMode === 'single'
+          ? `Single ${settings.activeSide === 'right' ? 'R' : settings.activeSide === 'left' ? 'L' : 'Auto'}`
+          : 'Both',
+        Number(settings.durationSec) ? `${Number(settings.durationSec)}s` : '',
+      ].filter(Boolean).join(' · ')
+      : '';
     const attemptDetail = balanceDetail || (ftHeight ? `FT height ${ftHeight}` : '');
     const measuredAt = result.measuredAt ? new Date(result.measuredAt).toLocaleString() : '';
+    const measuredTime = result.measuredAt
+      ? new Date(result.measuredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+      : '--:--';
+    const mobileCode = attemptCode || realtimeDisciplineShortLabel(disciplineId);
+    const mobileDetail = mobileBalanceDetail || ftHeight || discipline;
     return `
     <button class="traceItem${item.id === state.activeResultId ? ' active' : ''}" type="button" data-result-id="${item.id}">
+      <span class="traceItemMobileLine">
+        <strong class="traceItemMobileCode">${escapeHtml(mobileCode)}</strong>
+        <span class="traceItemMobileAthlete">${escapeHtml(result.athleteName || 'Unknown athlete')}</span>
+        <span class="traceItemMobileDetail">${escapeHtml(mobileDetail)}</span>
+        <time class="traceItemMobileTime" title="${escapeHtml(measuredAt)}">${escapeHtml(measuredTime)}</time>
+      </span>
       <div class="traceItemName">${escapeHtml(result.athleteName || 'Unknown athlete')}</div>
       ${attemptCode || attemptDetail ? `<div class="traceItemAttempt">${escapeHtml(attemptCode || discipline)}${attemptDetail ? `<span>${escapeHtml(attemptDetail)}</span>` : ''}</div>` : ''}
       <div class="traceItemMeta">${escapeHtml(discipline)}${measuredAt ? ` | ${escapeHtml(measuredAt)}` : ''}</div>
@@ -2654,6 +2885,16 @@ function renderTraceLibrary() {
 }
 
 async function loadSessionLibrary() {
+  if (ForcePlateNativeResults) {
+    const native = await nativeResultsFiles({
+      requestFolder: true,
+      pendingAction: 'analyze',
+      pick: ForcePlateNativeWindows,
+    });
+    if (native.needsFolder || native.cancelled) return;
+    await loadSessionLibraryFiles(native.files);
+    return;
+  }
   controls.sessionLibraryFileInput.click();
 }
 
@@ -2912,7 +3153,7 @@ function activateTrace(traceIdValue) {
   state.activeTraceId = trace.id;
   state.activeResultId = null;
   state.analyzeResult = null;
-  loadRows(trace.rows, trace.name);
+  loadRows(trace.rows, trace.name, { clockSync: trace.clockSync });
   renderTraceLibrary();
 }
 
@@ -3024,8 +3265,16 @@ function sampledRateHz(rows, timeKey = 't_ms') {
   return Math.round(1000 / median);
 }
 
-function drawSampleRateLabel(context, width, height, ratio, rows, timeKey = 't_ms') {
-  const rateHz = sampledRateHz(rows, timeKey);
+function drawSampleRateLabel(
+  context,
+  width,
+  height,
+  ratio,
+  rows,
+  timeKey = 't_ms',
+  overrideRateHz = 0,
+) {
+  const rateHz = overrideRateHz || sampledRateHz(rows, timeKey);
   if (!rateHz) return;
   context.save();
   context.fillStyle = 'rgba(255, 255, 255, 0.25)';
@@ -3375,9 +3624,22 @@ function resizeCanvas() {
 }
 
 function resizeRealtimeCanvas() {
+  if (!ForcePlateMobileMode) {
+    const ratio = window.devicePixelRatio || 1;
+    realtimeChart.width = Math.max(1, Math.floor(realtimeChart.clientWidth * ratio));
+    realtimeChart.height = Math.max(1, Math.floor(realtimeChart.clientHeight * ratio));
+    return;
+  }
+  const ratio = realtimeCanvasRatio();
+  const width = Math.max(1, Math.floor(realtimeChart.clientWidth * ratio));
+  const height = Math.max(1, Math.floor(realtimeChart.clientHeight * ratio));
+  if (realtimeChart.width !== width) realtimeChart.width = width;
+  if (realtimeChart.height !== height) realtimeChart.height = height;
+}
+
+function realtimeCanvasRatio() {
   const ratio = window.devicePixelRatio || 1;
-  realtimeChart.width = Math.max(1, Math.floor(realtimeChart.clientWidth * ratio));
-  realtimeChart.height = Math.max(1, Math.floor(realtimeChart.clientHeight * ratio));
+  return ForcePlateMobileMode ? Math.min(ratio, 2) : ratio;
 }
 
 function resizeSessionPreviewCanvas() {
@@ -3388,6 +3650,9 @@ function resizeSessionPreviewCanvas() {
 
 function sessionPreviewView() {
   if (!state.rows.length) return null;
+  if (ForcePlateMobileMode && state.sessionPreviewViewOverride) {
+    return state.sessionPreviewViewOverride;
+  }
   if (state.focusWindow) {
     return viewForRange(state.rows, state.focusWindow.startMs, state.focusWindow.endMs);
   }
@@ -3648,6 +3913,7 @@ function stopRealtimeRenderLoop() {
     state.realtime.renderBuffer.raf = 0;
   }
   state.realtime.renderBuffer.lastFrameMs = 0;
+  state.realtime.renderBuffer.lastDrawMs = 0;
 }
 
 function realtimeRenderFrame(nowMs) {
@@ -3668,6 +3934,14 @@ function realtimeRenderFrame(nowMs) {
     state.realtime.renderBuffer.cursorMs = Math.min(targetMs, currentMs + Math.max(0, elapsedMs));
   }
   state.realtime.renderBuffer.lastFrameMs = nowMs;
+  const minDrawIntervalMs = ForcePlateMobileMode ? 1000 / 30 : 0;
+  if (minDrawIntervalMs &&
+      state.realtime.renderBuffer.lastDrawMs &&
+      nowMs - state.realtime.renderBuffer.lastDrawMs < minDrawIntervalMs) {
+    state.realtime.renderBuffer.raf = requestAnimationFrame(realtimeRenderFrame);
+    return;
+  }
+  state.realtime.renderBuffer.lastDrawMs = nowMs;
   drawRealtime();
   state.realtime.renderBuffer.raf = requestAnimationFrame(realtimeRenderFrame);
 }
@@ -3730,7 +4004,7 @@ function returnRealtimeLive() {
 function drawRealtimeLine(samples, key, color, opacity, now = realtimeNowMs()) {
   if (samples.length < 2) return;
   const style = state.chartStyle || DefaultChartStyle;
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = realtimeCanvasRatio();
   const width = realtimeChart.clientWidth || 1;
   const nowX = width - 14;
   realtimeCtx.save();
@@ -3756,14 +4030,21 @@ function drawRealtimeLine(samples, key, color, opacity, now = realtimeNowMs()) {
 }
 
 function realtimeVisibleSamples() {
-  if (state.realtime.samples.length < 2 &&
-      state.realtime.leftSamples.length < 2 &&
-      state.realtime.rightSamples.length < 2) {
-    return state.realtime.samples;
+  if (!ForcePlateMobileMode) {
+    if (state.realtime.samples.length < 2 &&
+        state.realtime.leftSamples.length < 2 &&
+        state.realtime.rightSamples.length < 2) {
+      return state.realtime.samples;
+    }
+    const now = realtimeDisplayNowMs();
+    const spanMs = realtimeVisibleSpanMs();
+    return buildRealtimeTotalSamples(now).filter((sample) => now - sample.tMs <= spanMs);
   }
   const now = realtimeDisplayNowMs();
   const spanMs = realtimeVisibleSpanMs();
-  return buildRealtimeTotalSamples(now).filter((sample) => now - sample.tMs <= spanMs);
+  return state.realtime.samples.filter((sample) =>
+    sample.tMs <= now && now - sample.tMs <= spanMs
+  );
 }
 
 function realtimeVisibleSideSamples(samples, now = realtimeDisplayNowMs()) {
@@ -3772,36 +4053,41 @@ function realtimeVisibleSideSamples(samples, now = realtimeDisplayNowMs()) {
 }
 
 function buildRealtimeTotalSamples(now = realtimeDisplayNowMs(), visibleOnly = true) {
-  if (!state.realtime.leftSamples.length && !state.realtime.rightSamples.length) {
-    if (!visibleOnly) return state.realtime.samples;
+  if (!ForcePlateMobileMode) {
+    if (!state.realtime.leftSamples.length && !state.realtime.rightSamples.length) {
+      if (!visibleOnly) return state.realtime.samples;
+      const spanMs = realtimeVisibleSpanMs() + 100;
+      return state.realtime.samples.filter((sample) => sample.tMs <= now && now - sample.tMs <= spanMs);
+    }
     const spanMs = realtimeVisibleSpanMs() + 100;
-    return state.realtime.samples.filter((sample) => sample.tMs <= now && now - sample.tMs <= spanMs);
+    const events = [
+      ...state.realtime.leftSamples
+        .filter((sample) => sample.tMs <= now && (!visibleOnly || now - sample.tMs <= spanMs))
+        .map((sample) => ({ ...sample, side: 'left' })),
+      ...state.realtime.rightSamples
+        .filter((sample) => sample.tMs <= now && (!visibleOnly || now - sample.tMs <= spanMs))
+        .map((sample) => ({ ...sample, side: 'right' })),
+    ].sort((a, b) => a.tMs - b.tMs || (a.side === 'left' ? -1 : 1));
+    const totalSamples = [];
+    let left = NaN;
+    let right = NaN;
+    events.forEach((event) => {
+      if (event.side === 'left') {
+        left = event.value;
+      } else {
+        right = event.value;
+      }
+      const total = (finite(left) ? left : 0) + (finite(right) ? right : 0);
+      totalSamples.push({ tMs: event.tMs, total });
+      if (finite(total)) state.realtime.totalPeak = Math.max(state.realtime.totalPeak, total);
+    });
+    return totalSamples;
   }
+  if (!visibleOnly) return state.realtime.samples;
   const spanMs = realtimeVisibleSpanMs() + 100;
-  const events = [
-    ...state.realtime.leftSamples
-      .filter((sample) => sample.tMs <= now && (!visibleOnly || now - sample.tMs <= spanMs))
-      .map((sample) => ({ ...sample, side: 'left' })),
-    ...state.realtime.rightSamples
-      .filter((sample) => sample.tMs <= now && (!visibleOnly || now - sample.tMs <= spanMs))
-      .map((sample) => ({ ...sample, side: 'right' })),
-  ].sort((a, b) => a.tMs - b.tMs || (a.side === 'left' ? -1 : 1));
-  const totalSamples = [];
-  let left = NaN;
-  let right = NaN;
-  events.forEach((event) => {
-    if (event.side === 'left') {
-      left = event.value;
-    } else {
-      right = event.value;
-    }
-    const total = (finite(left) ? left : 0) + (finite(right) ? right : 0);
-    totalSamples.push({ tMs: event.tMs, total });
-    if (finite(total)) {
-      state.realtime.totalPeak = Math.max(state.realtime.totalPeak, total);
-    }
-  });
-  return totalSamples;
+  return state.realtime.samples.filter((sample) =>
+    sample.tMs <= now && now - sample.tMs <= spanMs
+  );
 }
 
 function realtimeDisciplineLabel(discipline) {
@@ -4577,6 +4863,9 @@ function drawScaleRealtime(width, height, ratio) {
     ratio,
     state.realtime.samples.length ? state.realtime.samples : state.realtime.leftSamples,
     'tMs',
+    ForcePlateMobileMode && state.realtime.live
+      ? Math.round(1000 / realtimeSampleIntervalMs())
+      : 0,
   );
   updateRealtimeScrubControl();
 }
@@ -5005,7 +5294,7 @@ function drawEyesClosedBalanceRealtime(width, height, ratio) {
 
 function drawRealtime() {
   resizeRealtimeCanvas();
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = realtimeCanvasRatio();
   const width = realtimeChart.clientWidth || 1;
   const height = realtimeChart.clientHeight || 1;
   const style = state.chartStyle || DefaultChartStyle;
@@ -5077,6 +5366,9 @@ function drawRealtime() {
     ratio,
     state.realtime.samples.length ? state.realtime.samples : state.realtime.leftSamples,
     'tMs',
+    ForcePlateMobileMode && state.realtime.live
+      ? Math.round(1000 / realtimeSampleIntervalMs())
+      : 0,
   );
   updateRealtimeScrubControl();
 }
@@ -5227,6 +5519,7 @@ function appendLocalRealtimeSample(localSample) {
   const sideSample = {
     tMs,
     value: localSample.absN,
+    streamSeq: localSample.streamSeq,
     copX: cop?.x ?? NaN,
     copY: cop?.y ?? NaN,
     rawCopX: rawCop?.x ?? NaN,
@@ -5244,15 +5537,23 @@ function appendLocalRealtimeSample(localSample) {
     state.realtime.liveLatestLeft = localSample.absN;
     state.realtime.balanceLatestLeft = sideSample;
     state.realtime.leftSamples.push(sideSample);
+    if (ForcePlateMobileMode) {
+      state.realtime.merge.pending[0].push(sideSample);
+      state.realtime.merge.latestTMs[0] = tMs;
+      state.realtime.merge.arrivalMs[0] = performance.now();
+    }
   } else if (localSample.side === 1) {
     state.realtime.liveLatestRight = localSample.absN;
     state.realtime.balanceLatestRight = sideSample;
     state.realtime.rightSamples.push(sideSample);
+    if (ForcePlateMobileMode) {
+      state.realtime.merge.pending[1].push(sideSample);
+      state.realtime.merge.latestTMs[1] = tMs;
+      state.realtime.merge.arrivalMs[1] = performance.now();
+    }
   }
-  if (finite(state.realtime.liveLatestLeft) || finite(state.realtime.liveLatestRight)) {
-    // Single ForcePlate is a valid RT configuration. A missing board
-    // contributes zero instead of preventing the canonical total trace from
-    // being created at all.
+  if (!ForcePlateMobileMode &&
+      (finite(state.realtime.liveLatestLeft) || finite(state.realtime.liveLatestRight))) {
     const leftValue = finite(state.realtime.liveLatestLeft) ? state.realtime.liveLatestLeft : 0;
     const rightValue = finite(state.realtime.liveLatestRight) ? state.realtime.liveLatestRight : 0;
     const totalSample = {
@@ -5267,6 +5568,56 @@ function appendLocalRealtimeSample(localSample) {
     if (isEyesClosedBalance()) appendBalanceGlobalSample(tMs);
   }
   if (!state.realtime.reviewMode) state.realtime.cursorMs = tMs;
+}
+
+function flushRealtimeMergedSamples() {
+  const merge = state.realtime.merge;
+  const nowMs = performance.now();
+  if (!merge.singleBoardAfterMs) merge.singleBoardAfterMs = nowMs + 500;
+  const active = merge.arrivalMs.map((arrivalMs) => arrivalMs > 0 && nowMs - arrivalMs <= 1000);
+  if (active[0] && active[1]) {
+    merge.dual = true;
+  } else if (merge.dual) {
+    merge.dual = false;
+    active.forEach((isActive, side) => {
+      if (isActive) return;
+      merge.pending[side] = [];
+      merge.latestTMs[side] = NaN;
+      merge.values[side] = NaN;
+    });
+  }
+  if (!merge.dual && nowMs < merge.singleBoardAfterMs) return;
+
+  const watermark = merge.dual
+    ? Math.min(merge.latestTMs[0], merge.latestTMs[1])
+    : Math.max(...merge.latestTMs.filter(finite));
+  if (!finite(watermark)) return;
+
+  while (true) {
+    const leftTMs = merge.pending[0][0]?.tMs;
+    const rightTMs = merge.pending[1][0]?.tMs;
+    const nextTMs = Math.min(
+      finite(leftTMs) ? leftTMs : Infinity,
+      finite(rightTMs) ? rightTMs : Infinity,
+    );
+    if (!finite(nextTMs) || nextTMs > watermark) break;
+
+    for (let side = 0; side < 2; side++) {
+      while (merge.pending[side].length && merge.pending[side][0].tMs <= nextTMs) {
+        merge.values[side] = merge.pending[side].shift().value;
+      }
+    }
+    if (nextTMs < merge.lastTMs) continue;
+
+    const left = finite(merge.values[0]) ? merge.values[0] : 0;
+    const right = finite(merge.values[1]) ? merge.values[1] : 0;
+    const totalSample = { tMs: nextTMs, left, right, total: left + right };
+    state.realtime.samples.push(totalSample);
+    state.realtime.totalPeak = Math.max(state.realtime.totalPeak, totalSample.total);
+    merge.lastTMs = nextTMs;
+    if (!isScaleDiscipline()) scanRealtimeDetector(totalSample);
+    if (isEyesClosedBalance()) appendBalanceGlobalSample(nextTMs);
+  }
 }
 
 function trimRealtimeSamples() {
@@ -5373,10 +5724,18 @@ function localBoardUrl(baseValue, path) {
   return url.toString();
 }
 
-function localBatchUrl(baseValue, afterSeq) {
-  const url = new URL(localBoardUrl(baseValue, '/local_batch.bin'));
+function localBatchUrl(baseValue, afterSeq, mobileEndpoint = ForcePlatePersistentRealtime) {
+  const path = mobileEndpoint ? '/local_batch_mobile.bin' : '/local_batch.bin';
+  const url = new URL(localBoardUrl(baseValue, path));
   url.searchParams.set('after', String(afterSeq));
-  url.searchParams.set('max', '24');
+  url.searchParams.set('max', String(mobileEndpoint ? RealtimeBatchRequestSamples : 24));
+  return url.toString();
+}
+
+function localMobileStreamUrl(baseValue, afterSeq) {
+  const url = new URL(localBoardUrl(baseValue, '/local_stream.bin'));
+  url.port = String(RealtimeMobileStreamPort);
+  url.searchParams.set('after', String(afterSeq));
   return url.toString();
 }
 
@@ -5464,6 +5823,8 @@ function decodeRealtimeBatch(buffer) {
   const side = view.getUint8(5);
   const sampleSize = view.getUint16(6, true);
   const sampleCount = view.getUint16(8, true);
+  const oldestSeq = view.getUint32(12, true);
+  const nextSeq = view.getUint32(16, true);
   const firstSeq = view.getUint32(20, true);
   const samples = [];
   let offset = 24;
@@ -5489,7 +5850,36 @@ function decodeRealtimeBatch(buffer) {
     });
     offset += sampleSize;
   }
-  return { firstSeq, samples };
+  return { oldestSeq, nextSeq, firstSeq, samples };
+}
+
+function decodeRealtimeStreamBytes(pending, incoming) {
+  const bytes = new Uint8Array(pending.length + incoming.length);
+  bytes.set(pending, 0);
+  bytes.set(incoming, pending.length);
+  const batches = [];
+  let offset = 0;
+
+  while (bytes.length - offset >= 24) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset, bytes.length - offset);
+    if (view.getUint32(0, true) !== 0x31425046) {
+      offset++;
+      continue;
+    }
+    const sampleSize = view.getUint16(6, true);
+    const sampleCount = view.getUint16(8, true);
+    if (sampleSize < 16 || sampleSize > 128 || sampleCount > RealtimeBatchRequestSamples) {
+      offset++;
+      continue;
+    }
+    const frameSize = 24 + sampleSize * sampleCount;
+    if (bytes.length - offset < frameSize) break;
+    const frame = bytes.slice(offset, offset + frameSize);
+    batches.push(decodeRealtimeBatch(frame.buffer));
+    offset += frameSize;
+  }
+
+  return { pending: bytes.slice(offset), batches };
 }
 
 async function startRealtimeBoard(baseValue, sync = false, filter = null) {
@@ -6448,22 +6838,31 @@ async function addBalanceResultToSession() {
 async function pollRealtimeBatchLoop(baseValue, abort, boardLabel) {
   let afterSeq = 0;
   let consecutiveErrors = 0;
+  let mobileEndpoint = ForcePlatePersistentRealtime;
   while (state.realtime.live && !abort.signal.aborted) {
     try {
-      const response = await fetch(localBatchUrl(baseValue, afterSeq), {
+      const response = await fetch(localBatchUrl(baseValue, afterSeq, mobileEndpoint), {
         cache: 'no-store',
         signal: abort.signal,
       });
+      if (response.status === 404 && mobileEndpoint) {
+        mobileEndpoint = false;
+        continue;
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const batch = decodeRealtimeBatch(await response.arrayBuffer());
       batch.samples.forEach((sample) => {
         appendLocalRealtimeSample(sample);
         afterSeq = sample.streamSeq;
       });
+      if (ForcePlateMobileMode) flushRealtimeMergedSamples();
       consecutiveErrors = 0;
       trimRealtimeSamples();
       drawRealtimeFromReceiver();
-      if (batch.samples.length < 24) {
+      const shouldDelay = ForcePlatePersistentRealtime
+        ? !batch.samples.length || afterSeq >= batch.nextSeq - 1
+        : batch.samples.length < 24;
+      if (shouldDelay) {
         await abortableDelay(streamIntervalMs(), abort);
       }
     } catch (error) {
@@ -6473,6 +6872,67 @@ async function pollRealtimeBatchLoop(baseValue, abort, boardLabel) {
         setStatus(`${boardLabel} unavailable; continuing RT with the connected ForcePlate.`);
       }
       await abortableDelay(Math.min(1000, 100 * consecutiveErrors), abort);
+    }
+  }
+}
+
+async function consumeRealtimePersistentBinaryStream(baseValue, abort, boardLabel) {
+  let afterSeq = 0;
+  let streamEstablished = false;
+  let reconnectErrors = 0;
+
+  while (state.realtime.live && !abort.signal.aborted) {
+    const streamAbort = new AbortController();
+    const abortStream = () => streamAbort.abort();
+    abort.signal.addEventListener('abort', abortStream, { once: true });
+    const connectTimeout = window.setTimeout(() => streamAbort.abort(), 1500);
+
+    try {
+      const response = await fetch(localMobileStreamUrl(baseValue, afterSeq), {
+        cache: 'no-store',
+        signal: streamAbort.signal,
+      });
+      window.clearTimeout(connectTimeout);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.body) throw new Error('stream body unavailable');
+
+      streamEstablished = true;
+      reconnectErrors = 0;
+      let pending = new Uint8Array(0);
+      const reader = response.body.getReader();
+      while (state.realtime.live && !abort.signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const decoded = decodeRealtimeStreamBytes(pending, value || new Uint8Array(0));
+        pending = decoded.pending;
+        decoded.batches.forEach((batch) => {
+          batch.samples.forEach((sample) => {
+            appendLocalRealtimeSample(sample);
+            afterSeq = sample.streamSeq;
+          });
+        });
+        if (!decoded.batches.length) continue;
+        flushRealtimeMergedSamples();
+        trimRealtimeSamples();
+        drawRealtimeFromReceiver();
+      }
+      if (abort.signal.aborted || !state.realtime.live) return;
+      throw new Error('stream ended');
+    } catch (error) {
+      window.clearTimeout(connectTimeout);
+      if (abort.signal.aborted || !state.realtime.live) return;
+      if (!streamEstablished) {
+        setStatus(`${boardLabel} persistent stream unavailable; using compatibility polling.`);
+        return pollRealtimeBatchLoop(baseValue, abort, boardLabel);
+      }
+      reconnectErrors++;
+      if (reconnectErrors === 1) {
+        setStatus(`${boardLabel} stream interrupted; reconnecting from sample ${afterSeq}.`);
+      }
+      await abortableDelay(Math.min(1000, 100 * reconnectErrors), abort);
+    } finally {
+      window.clearTimeout(connectTimeout);
+      abort.signal.removeEventListener('abort', abortStream);
     }
   }
 }
@@ -6549,7 +7009,9 @@ async function startRealtimeStream() {
     ? scaleRun
       ? 'Scale: step on the ForcePlate(s) and stand still'
       : 'Body mass unknown: step on the ForcePlate(s) and stand still'
-    : `Batch realtime sync ${streamIntervalMs()} ms`);
+    : ForcePlatePersistentRealtime
+      ? 'Persistent binary realtime stream'
+      : `Batch realtime sync ${streamIntervalMs()} ms`);
   if (snapshot.discipline === 'eyes_closed_balance') {
     loadBalanceThresholds().catch(() => {});
   }
@@ -6559,9 +7021,12 @@ async function startRealtimeStream() {
     if (needsBodyMass) await setOledScaleUi('step', { force: true });
     await startRealtimeBoard(controls.endpoint.value, true, requestedFilter);
     state.realtime.stopUrls.push(localBatchStopUrl(controls.slaveEndpoint.value));
+    const receiveRealtime = ForcePlatePersistentRealtime
+      ? consumeRealtimePersistentBinaryStream
+      : pollRealtimeBatchLoop;
     Promise.all([
-      pollRealtimeBatchLoop(controls.endpoint.value, masterAbort, 'Master / Left'),
-      pollRealtimeBatchLoop(controls.slaveEndpoint.value, slaveAbort, 'Right / Slave'),
+      receiveRealtime(controls.endpoint.value, masterAbort, 'Master / Left'),
+      receiveRealtime(controls.slaveEndpoint.value, slaveAbort, 'Right / Slave'),
     ]).catch((error) => {
       if (error.name !== 'AbortError') setStatus(`Realtime error: ${error.message}`);
     }).finally(async () => {
@@ -6635,6 +7100,15 @@ function resetRealtimeSimulation() {
   state.realtime.samples = [];
   state.realtime.leftSamples = [];
   state.realtime.rightSamples = [];
+  state.realtime.merge = {
+    pending: [[], []],
+    latestTMs: [NaN, NaN],
+    arrivalMs: [0, 0],
+    values: [NaN, NaN],
+    dual: false,
+    singleBoardAfterMs: 0,
+    lastTMs: -Infinity,
+  };
   state.realtime.balanceGlobalSamples = [];
   state.realtime.balanceLoad = [
     { loaded: false, belowCount: 0, segmentId: 0 },
@@ -6660,6 +7134,7 @@ function resetRealtimeSimulation() {
   state.realtime.balanceLatestRight = null;
   state.realtime.renderBuffer.cursorMs = 0;
   state.realtime.renderBuffer.lastFrameMs = 0;
+  state.realtime.renderBuffer.lastDrawMs = 0;
   state.realtime.stopUrls = [];
   state.realtime.runConfig = null;
   state.realtime.preflight = {
@@ -8260,6 +8735,7 @@ function setDiscipline(discipline) {
   if (discipline === 'eyes_closed_balance') resetBalanceAnalyzePlayback({ resetView: true });
   state.adjustedLandmarks = { total: null, left: null, right: null };
   state.focusWindow = null;
+  state.sessionPreviewViewOverride = null;
   state.selectedLandmark = null;
   state.metricSource = discipline === 'drop_jump' ? 'adjusted' : 'fw';
   controls.metricsFw.classList.toggle('active', state.metricSource === 'fw');
@@ -8295,15 +8771,17 @@ function clearAdjustedLandmarks() {
   draw();
 }
 
-function loadRows(rows, source) {
+function loadRows(rows, source, meta = {}) {
   state.rows = rows;
   state.source = source;
+  state.clockSync = meta.clockSync || null;
   if (isBalanceAnalyze()) resetBalanceAnalyzePlayback({ resetView: true });
   else stopBalanceAnalyzePlayback();
   state.analyzeResult = null;
   state.activeResultId = null;
   state.adjustedLandmarks = { total: null, left: null, right: null };
   state.focusWindow = null;
+  state.sessionPreviewViewOverride = null;
   state.selectedLandmark = null;
   state.metricSource = state.discipline === 'drop_jump' ? 'adjusted' : 'fw';
   state.cursorIndex = state.rows.length ? 0 : -1;
@@ -8921,7 +9399,7 @@ async function loadEndpoint() {
     const decoded = decodeFwTraceBinary(await binaryResponse.arrayBuffer());
     state.activeTraceId = null;
     applyTraceDiscipline(decoded.discipline);
-    loadRows(decoded.rows, binaryUrl);
+    loadRows(decoded.rows, binaryUrl, { clockSync: decoded.clockSync });
     renderTraceLibrary();
     await autosaveLoadedTrace();
     return;
@@ -9111,7 +9589,9 @@ function updateHoverCursor(event) {
   chart.classList.toggle('focusHover', !landmarkHit && Boolean(focusEdgeAtPixel(pos)));
 }
 
-  controls.exportCsv.addEventListener('click', exportCurrentCsv);
+  controls.exportCsv.addEventListener('click', () => {
+    exportCurrentCsv().catch((error) => setStatus(`CSV export error: ${error.message}`));
+  });
 controls.appTabMeasure.addEventListener('click', () => setAppTab('measure'));
 controls.appTabAnalyze.addEventListener('click', () => setAppTab('analyze'));
 controls.appTabResults.addEventListener('click', () => setAppTab('results'));
@@ -9191,15 +9671,17 @@ controls.measurePanelTabSession.addEventListener('click', () => setMeasurePanelT
 controls.measurePanelTabRealtime.addEventListener('click', () => setMeasurePanelTab('realtime'));
 controls.sessionPreviewFitAll.addEventListener('click', () => {
   state.focusWindow = null;
+  state.sessionPreviewViewOverride = null;
   drawSessionPreview();
 });
 controls.sessionPreviewFitJump.addEventListener('click', () => {
+  state.sessionPreviewViewOverride = null;
   ensureFocusWindow();
   drawSessionPreview();
 });
 controls.resultsSessionSelect.addEventListener('change', renderResultsPage);
 controls.resultsRefresh.addEventListener('click', () => {
-  loadResultsSources().catch((error) => setStatus(`Results refresh error: ${error.message}`));
+  refreshNativeResultsFolder().catch((error) => setStatus(`Results refresh error: ${error.message}`));
 });
 controls.resultsPickFolder.addEventListener('click', () => {
   pickResultsFolder().catch((error) => setStatus(`Results folder error: ${error.message}`));
@@ -9299,7 +9781,10 @@ controls.sessionStop.addEventListener('click', async () => {
   renderSessionControls();
   await updateCacheStatus();
   if (state.session.results.length) {
-    await exportCurrentSessionPackage();
+    const exportOutcome = await exportCurrentSessionPackage();
+    if (ForcePlateNativeResults && exportOutcome === 'saved') {
+      window.alert('Session Saved');
+    }
   } else {
     setStatus('Session stopped');
   }
@@ -9518,7 +10003,7 @@ renderPresetOptions();
 setSettingsTab('traces');
 renderTraceLibrary();
 initializeSessionControls().catch((error) => setStatus(`Athletes load error: ${error.message}`));
-loadResultsSources().catch((error) => setStatus(`Results load error: ${error.message}`));
+refreshNativeResultsFolder({ quiet: true }).catch((error) => setStatus(`Results load error: ${error.message}`));
 setMeasurePanelTab('session');
 syncRealtimeRenderBufferControls();
 syncBalanceStanceMode();

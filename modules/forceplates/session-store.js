@@ -29,6 +29,7 @@ window.JBForcePlateSessionStore = (() => {
       categories: [],
       rosterSource: 'fallback',
       rosterMessage: 'Anonymous fallback',
+      rosterUpdatedAt: 0,
       results: [],
     };
   }
@@ -61,13 +62,44 @@ window.JBForcePlateSessionStore = (() => {
 
   function readStoredState() {
     try {
-      const parsed = JSON.parse(localStorage.getItem(StorageKey) || 'null');
+      const browserState = JSON.parse(localStorage.getItem(StorageKey) || 'null');
+      const nativeRoster = window.JBPerformanceHubNativeBootstrap?.forceplateRoster;
+      const browserHasRoster = Array.isArray(browserState?.athletes) && browserState.athletes.length > 0;
+      const nativeHasRoster = Array.isArray(nativeRoster?.athletes) && nativeRoster.athletes.length > 0;
+      const useNativeRoster = nativeHasRoster && (
+        !browserHasRoster
+        || Number(nativeRoster.rosterUpdatedAt || 0) >= Number(browserState.rosterUpdatedAt || 0)
+      );
+      const parsed = useNativeRoster
+        ? {
+          ...(browserState && typeof browserState === 'object' ? browserState : {}),
+          currentAthleteId: nativeRoster.currentAthleteId,
+          athletes: nativeRoster.athletes,
+          categories: nativeRoster.categories,
+          rosterSource: nativeRoster.rosterSource,
+          rosterMessage: nativeRoster.rosterMessage,
+          rosterUpdatedAt: nativeRoster.rosterUpdatedAt,
+        }
+        : browserState;
       if (!parsed || typeof parsed !== 'object') return defaultState();
       const storedSession = parsed.session || {};
       const storedDiscipline = storedSession.disciplineDefinition || {};
+      const storedAthletes = Array.isArray(parsed.athletes)
+        ? parsed.athletes.map(normalizeAthlete).filter((athlete) => athlete.athleteId)
+        : [];
+      const storedCategories = Array.isArray(parsed.categories)
+        ? parsed.categories.map(normalizeCategory).filter((category) => category.displayName)
+        : [];
       return {
         ...defaultState(),
         ...parsed,
+        athletes: storedAthletes.length ? storedAthletes : fallbackAthletes,
+        categories: storedCategories,
+        rosterSource: storedAthletes.length ? String(parsed.rosterSource || 'cache') : 'fallback',
+        rosterMessage: storedAthletes.length
+          ? String(parsed.rosterMessage || `Offline cache: ${storedAthletes.length} athletes`)
+          : 'Anonymous fallback',
+        rosterUpdatedAt: Number(parsed.rosterUpdatedAt) || 0,
         session: models.createSessionConfig({
           sessionId: storedSession.sessionId,
           active: Boolean(storedSession.active),
@@ -95,7 +127,34 @@ window.JBForcePlateSessionStore = (() => {
       schema: 'jb.forceplate.browser-state.v1',
       session: state.session,
       currentAthleteId: state.currentAthleteId,
+      athletes: state.athletes,
+      categories: state.categories,
+      rosterSource: state.rosterSource,
+      rosterMessage: state.rosterMessage,
+      rosterUpdatedAt: Number(state.rosterUpdatedAt) || 0,
     };
+  }
+
+  function nativeRosterPayload(state) {
+    return {
+      schema: 'jb.performancehub.roster-cache.v1',
+      currentAthleteId: state.currentAthleteId,
+      athletes: state.athletes,
+      categories: state.categories,
+      rosterSource: state.rosterSource,
+      rosterMessage: state.rosterMessage,
+      rosterUpdatedAt: Number(state.rosterUpdatedAt) || 0,
+    };
+  }
+
+  function writeNativeRoster(state) {
+    const webview = window.chrome?.webview;
+    if (!webview?.postMessage) return;
+    webview.postMessage({
+      type: 'performancehub.local-store.put',
+      key: 'forceplate.roster.v1',
+      value: nativeRosterPayload(state),
+    });
   }
 
   function writeStoredState(state) {
@@ -107,6 +166,7 @@ window.JBForcePlateSessionStore = (() => {
       localStorage.removeItem(StorageKey);
       localStorage.setItem(StorageKey, payload);
     }
+    writeNativeRoster(state);
   }
 
   function readLibrarianApi() {
