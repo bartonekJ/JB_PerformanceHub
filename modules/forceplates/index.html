@@ -11,9 +11,9 @@
   <link rel="stylesheet" href="../../core/theme/tokens.css">
   <link rel="stylesheet" href="../../core/ui/ui.css">
   <link rel="stylesheet" href="../../core/ui/workspace.css">
-  <link rel="stylesheet" href="style.css?v=20260715-offline1">
-  <link rel="stylesheet" href="mobile.css?v=20260715-mobile1">
-  <link rel="stylesheet" href="mobile-layout.css?v=20260715-layout11">
+  <link rel="stylesheet" href="style.css?v=20260719-gpu1">
+  <link rel="stylesheet" href="mobile.css?v=20260719-gpu1">
+  <link rel="stylesheet" href="mobile-layout.css?v=20260719-gpu1">
 </head>
 <body data-module="forceplates">
   <header class="ph-topbar fpTopbar">
@@ -93,7 +93,10 @@
             <button id="realtimeLive" class="active" type="button" title="Return to live" aria-label="Return to live">LIVE</button>
           </div>
         </div>
-        <canvas id="realtimeChart"></canvas>
+        <div class="realtimeCanvasStack">
+          <canvas id="realtimeGpuChart" aria-hidden="true"></canvas>
+          <canvas id="realtimeChart"></canvas>
+        </div>
         <div class="realtimeScrub">
           <input id="realtimeScrub" type="range" min="0" max="0" step="1" value="0">
         </div>
@@ -711,7 +714,7 @@
   <script src="forceplate-models.js?v=20260714-scale2"></script>
   <script src="session-store.js?v=20260715-native-store1"></script>
   <script src="session-archive.js"></script>
-  <script src="app.js?v=20260715-results-picker2"></script>
+  <script src="app.js?v=20260719-gpu3"></script>
   <script src="mobile-layout.js?v=20260715-layout11"></script>
 </body>
 </html>

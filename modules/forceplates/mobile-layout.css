@@ -122,6 +122,18 @@ html.fpMobileApp body.fpMobileLayoutV2 .realtimePanel canvas {
   flex: 1 1 auto;
 }
 
+html.fpMobileApp body.fpMobileLayoutV2 .realtimeCanvasStack {
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+html.fpMobileApp body.fpMobileLayoutV2 .realtimeCanvasStack > canvas {
+  position: absolute;
+  min-height: 0;
+  flex: none;
+}
+
 html.fpMobileApp body.fpMobileLayoutV2 .mobileModeSwitch {
   position: absolute;
   z-index: 45;

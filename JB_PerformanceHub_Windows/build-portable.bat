@@ -1,8 +1,11 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-dotnet publish "JB.PerformanceHub.Windows.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
+set "PORTABLE_DIR=%~dp0Release\PerformanceHub"
+set "ARTIFACTS_DIR=%~dp0.build"
+
+dotnet publish "JB.PerformanceHub.Windows.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false --artifacts-path "%ARTIFACTS_DIR%" --output "%PORTABLE_DIR%"
 if errorlevel 1 exit /b %errorlevel%
 echo.
 echo Portable build:
-echo %~dp0bin\Release\net10.0-windows\win-x64\publish\PerformanceHub.exe
+echo %PORTABLE_DIR%\PerformanceHub.exe

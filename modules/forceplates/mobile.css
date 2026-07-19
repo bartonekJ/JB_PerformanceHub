@@ -320,6 +320,14 @@ html.fpMobileApp .realtimePanel canvas {
   min-height: 210px;
 }
 
+html.fpMobileApp .realtimePanel .realtimeCanvasStack {
+  min-height: 210px;
+}
+
+html.fpMobileApp .realtimePanel .realtimeCanvasStack > canvas {
+  min-height: 0;
+}
+
 html.fpMobileApp .sessionPanel {
   order: 2;
   display: block;

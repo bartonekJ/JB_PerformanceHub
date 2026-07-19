@@ -5,6 +5,11 @@ const ForcePlateNativeAndroid = Boolean(window.JBForcePlateAndroid);
 const ForcePlateNativeResults = ForcePlateNativeWindows || ForcePlateNativeAndroid;
 const RealtimeBatchRequestSamples = 96;
 const RealtimeMobileStreamPort = 8081;
+const RealtimeStartRequestAttempts = 4;
+const RealtimeStartRequestTimeoutMs = 2000;
+const RealtimePersistentInitialAttempts = 4;
+const RealtimeRenderTargetFps = 60;
+const RealtimeRenderIntervalMs = 1000 / RealtimeRenderTargetFps;
 const NativeResultsRequests = new Map();
 let NativeResultsRequestId = 0;
 let PendingNativeResultsAction = '';
@@ -80,6 +85,7 @@ const state = {
     timer: 0,
     lastFetchedRevision: 0,
     lastStateText: '',
+    lastDiagnosticsText: '',
     active: false,
   },
   deviceSettings: {
@@ -105,6 +111,7 @@ const state = {
     rightSamples: [],
     merge: {
       pending: [[], []],
+      pendingHead: [0, 0],
       latestTMs: [NaN, NaN],
       arrivalMs: [0, 0],
       values: [NaN, NaN],
@@ -151,8 +158,24 @@ const state = {
       raf: 0,
       lastFrameMs: 0,
       lastDrawMs: 0,
+      lastScrubUpdateMs: 0,
+    },
+    renderPerf: {
+      fps: 0,
+      lastFrameMs: 0,
+      averageFrameMs: 0,
+      maxFrameMs: 0,
+      windowStartMs: 0,
+      windowFrames: 0,
+      windowFrameMs: 0,
+      windowMaxFrameMs: 0,
+      sourcePoints: 0,
+      renderedColumns: 0,
+      canvasWidth: 0,
+      canvasHeight: 0,
     },
     historyMs: 10 * 60 * 1000,
+    lastTrimMs: 0,
     warmupUntilMs: 0,
     warmupLatestLeft: NaN,
     warmupLatestRight: NaN,
@@ -182,6 +205,10 @@ const state = {
       left: null,
       right: null,
     },
+    transport: {
+      left: { mode: 'idle', reconnects: 0, lastReason: '' },
+      right: { mode: 'idle', reconnects: 0, lastReason: '' },
+    },
     debugHud: {
       visible: true,
       ageOpen: false,
@@ -205,8 +232,19 @@ const state = {
 
 const chart = document.getElementById('chart');
 const ctx = chart.getContext('2d');
+const realtimeGpuChart = document.getElementById('realtimeGpuChart');
 const realtimeChart = document.getElementById('realtimeChart');
-const realtimeCtx = realtimeChart.getContext('2d');
+const realtimeCtx = realtimeChart.getContext('2d', { alpha: true });
+let realtimeGpuRenderer = null;
+let realtimeGpuInitRaf = 0;
+realtimeGpuChart.addEventListener('webglcontextlost', (event) => {
+  event.preventDefault();
+  realtimeGpuRenderer = null;
+});
+realtimeGpuChart.addEventListener('webglcontextrestored', () => {
+  realtimeGpuRenderer = null;
+  scheduleRealtimeGpuInitialization();
+});
 const sessionPreviewChart = document.getElementById('sessionPreviewChart');
 const sessionPreviewCtx = sessionPreviewChart.getContext('2d');
 const deviceFilterChart = document.getElementById('deviceFilterChart');
@@ -819,7 +857,7 @@ function renderDeviceState() {
     detail = `Streaming ${Math.round(1000 / realtimeSampleIntervalMs())} Hz`;
   } else if (state.measurementPoll.active) {
     title = state.measurementPoll.lastStateText || 'Preparing';
-    detail = 'Measurement in progress';
+    detail = state.measurementPoll.lastDiagnosticsText || 'Measurement in progress';
   }
 
   controls.deviceState.textContent = title;
@@ -3290,6 +3328,23 @@ function drawSampleRateLabel(
   context.restore();
 }
 
+function realtimeRenderRateHz() {
+  if (!state.realtime.live) return 0;
+  let sum = 0;
+  let count = 0;
+  const left = state.realtime.debug.left?.rate;
+  const right = state.realtime.debug.right?.rate;
+  if (finite(left) && left > 0) {
+    sum += left;
+    count++;
+  }
+  if (finite(right) && right > 0) {
+    sum += right;
+    count++;
+  }
+  return count ? Math.round(sum / count) : Math.round(1000 / realtimeSampleIntervalMs());
+}
+
 function averageColumn(rows, key, start, end) {
   let sum = 0;
   let count = 0;
@@ -3629,17 +3684,27 @@ function resizeCanvas() {
 }
 
 function resizeRealtimeCanvas() {
-  if (!ForcePlateMobileMode) {
-    const ratio = window.devicePixelRatio || 1;
-    realtimeChart.width = Math.max(1, Math.floor(realtimeChart.clientWidth * ratio));
-    realtimeChart.height = Math.max(1, Math.floor(realtimeChart.clientHeight * ratio));
-    return;
-  }
   const ratio = realtimeCanvasRatio();
   const width = Math.max(1, Math.floor(realtimeChart.clientWidth * ratio));
   const height = Math.max(1, Math.floor(realtimeChart.clientHeight * ratio));
-  if (realtimeChart.width !== width) realtimeChart.width = width;
-  if (realtimeChart.height !== height) realtimeChart.height = height;
+  let resized = false;
+  if (realtimeChart.width !== width) {
+    realtimeChart.width = width;
+    resized = true;
+  }
+  if (realtimeChart.height !== height) {
+    realtimeChart.height = height;
+    resized = true;
+  }
+  if (realtimeGpuChart.width !== width) {
+    realtimeGpuChart.width = width;
+    resized = true;
+  }
+  if (realtimeGpuChart.height !== height) {
+    realtimeGpuChart.height = height;
+    resized = true;
+  }
+  return resized;
 }
 
 function realtimeCanvasRatio() {
@@ -3875,12 +3940,14 @@ function realtimeY(value) {
 }
 
 function realtimeNowMs() {
-  const candidates = [
-    state.realtime.samples.at(-1)?.tMs,
-    state.realtime.leftSamples.at(-1)?.tMs,
-    state.realtime.rightSamples.at(-1)?.tMs,
-  ].filter(finite);
-  return candidates.length ? Math.max(...candidates) : 0;
+  let latest = 0;
+  const totalTMs = state.realtime.samples[state.realtime.samples.length - 1]?.tMs;
+  const leftTMs = state.realtime.leftSamples[state.realtime.leftSamples.length - 1]?.tMs;
+  const rightTMs = state.realtime.rightSamples[state.realtime.rightSamples.length - 1]?.tMs;
+  if (finite(totalTMs)) latest = Math.max(latest, totalTMs);
+  if (finite(leftTMs)) latest = Math.max(latest, leftTMs);
+  if (finite(rightTMs)) latest = Math.max(latest, rightTMs);
+  return latest;
 }
 
 function realtimeRenderBufferEnabled() {
@@ -3922,31 +3989,40 @@ function stopRealtimeRenderLoop() {
 }
 
 function realtimeRenderFrame(nowMs) {
-  if (!state.realtime.live || !state.realtime.renderBuffer.enabled) {
+  if (!state.realtime.live) {
     stopRealtimeRenderLoop();
     drawRealtime();
     return;
   }
 
-  const targetMs = realtimeRenderTargetMs();
-  const currentMs = state.realtime.renderBuffer.cursorMs;
-  if (!finite(currentMs) || currentMs <= 0 || currentMs > targetMs || targetMs - currentMs > 600) {
-    state.realtime.renderBuffer.cursorMs = targetMs;
+  if (state.realtime.renderBuffer.enabled) {
+    const targetMs = realtimeRenderTargetMs();
+    const currentMs = state.realtime.renderBuffer.cursorMs;
+    if (!finite(currentMs) || currentMs <= 0 || currentMs > targetMs || targetMs - currentMs > 600) {
+      state.realtime.renderBuffer.cursorMs = targetMs;
+    } else {
+      const elapsedMs = state.realtime.renderBuffer.lastFrameMs
+        ? nowMs - state.realtime.renderBuffer.lastFrameMs
+        : 0;
+      state.realtime.renderBuffer.cursorMs = Math.min(targetMs, currentMs + Math.max(0, elapsedMs));
+    }
   } else {
-    const elapsedMs = state.realtime.renderBuffer.lastFrameMs
-      ? nowMs - state.realtime.renderBuffer.lastFrameMs
-      : 0;
-    state.realtime.renderBuffer.cursorMs = Math.min(targetMs, currentMs + Math.max(0, elapsedMs));
+    state.realtime.renderBuffer.cursorMs = realtimeNowMs();
   }
   state.realtime.renderBuffer.lastFrameMs = nowMs;
-  const minDrawIntervalMs = ForcePlateMobileMode ? 1000 / 30 : 0;
-  if (minDrawIntervalMs &&
-      state.realtime.renderBuffer.lastDrawMs &&
-      nowMs - state.realtime.renderBuffer.lastDrawMs < minDrawIntervalMs) {
+  const elapsedSinceDrawMs = state.realtime.renderBuffer.lastDrawMs
+    ? nowMs - state.realtime.renderBuffer.lastDrawMs
+    : RealtimeRenderIntervalMs;
+  if (elapsedSinceDrawMs < RealtimeRenderIntervalMs - 0.5) {
     state.realtime.renderBuffer.raf = requestAnimationFrame(realtimeRenderFrame);
     return;
   }
-  state.realtime.renderBuffer.lastDrawMs = nowMs;
+  if (state.realtime.renderBuffer.lastDrawMs) {
+    const completedIntervals = Math.max(1, Math.floor(elapsedSinceDrawMs / RealtimeRenderIntervalMs));
+    state.realtime.renderBuffer.lastDrawMs += completedIntervals * RealtimeRenderIntervalMs;
+  } else {
+    state.realtime.renderBuffer.lastDrawMs = nowMs;
+  }
   drawRealtime();
   state.realtime.renderBuffer.raf = requestAnimationFrame(realtimeRenderFrame);
 }
@@ -3954,14 +4030,53 @@ function realtimeRenderFrame(nowMs) {
 function startRealtimeRenderLoop() {
   stopRealtimeRenderLoop();
   syncRealtimeRenderBufferControls();
-  if (!state.realtime.live || !state.realtime.renderBuffer.enabled) return;
-  state.realtime.renderBuffer.cursorMs = realtimeRenderTargetMs();
+  if (!state.realtime.live) return;
+  state.realtime.renderBuffer.cursorMs = state.realtime.renderBuffer.enabled
+    ? realtimeRenderTargetMs()
+    : realtimeNowMs();
   state.realtime.renderBuffer.raf = requestAnimationFrame(realtimeRenderFrame);
 }
 
 function drawRealtimeFromReceiver() {
-  if (state.realtime.live && state.realtime.renderBuffer.enabled) return;
+  if (state.realtime.live) return;
   drawRealtime();
+}
+
+function resetRealtimeRenderPerformance() {
+  state.realtime.renderPerf = {
+    fps: 0,
+    lastFrameMs: 0,
+    averageFrameMs: 0,
+    maxFrameMs: 0,
+    windowStartMs: 0,
+    windowFrames: 0,
+    windowFrameMs: 0,
+    windowMaxFrameMs: 0,
+    sourcePoints: 0,
+    renderedColumns: 0,
+    canvasWidth: 0,
+    canvasHeight: 0,
+  };
+}
+
+function recordRealtimeRenderPerformance(startedMs) {
+  const completedMs = performance.now();
+  const frameMs = completedMs - startedMs;
+  const perf = state.realtime.renderPerf;
+  perf.lastFrameMs = frameMs;
+  perf.windowFrames++;
+  perf.windowFrameMs += frameMs;
+  perf.windowMaxFrameMs = Math.max(perf.windowMaxFrameMs, frameMs);
+  if (!perf.windowStartMs) perf.windowStartMs = completedMs;
+  const elapsedMs = completedMs - perf.windowStartMs;
+  if (elapsedMs < 1000) return;
+  perf.fps = perf.windowFrames * 1000 / elapsedMs;
+  perf.averageFrameMs = perf.windowFrames ? perf.windowFrameMs / perf.windowFrames : 0;
+  perf.maxFrameMs = perf.windowMaxFrameMs;
+  perf.windowStartMs = completedMs;
+  perf.windowFrames = 0;
+  perf.windowFrameMs = 0;
+  perf.windowMaxFrameMs = 0;
 }
 
 function realtimeVisibleSpanMs() {
@@ -3972,9 +4087,16 @@ function realtimeVisibleSpanMs() {
 function updateRealtimeScrubControl() {
   if (!controls.realtimeScrub) return;
   const scrubWrap = controls.realtimeScrub.closest('.realtimeScrub');
+  const hidden = state.realtime.live && state.realtime.renderBuffer.enabled;
   if (scrubWrap) {
-    scrubWrap.hidden = state.realtime.live && state.realtime.renderBuffer.enabled;
+    if (scrubWrap.hidden !== hidden) scrubWrap.hidden = hidden;
   }
+  controls.realtimeLive.classList.toggle('active', !state.realtime.reviewMode);
+  if (hidden) return;
+  const scrubClockMs = performance.now();
+  if (state.realtime.live && !state.realtime.reviewMode &&
+      scrubClockMs - state.realtime.renderBuffer.lastScrubUpdateMs < 100) return;
+  state.realtime.renderBuffer.lastScrubUpdateMs = scrubClockMs;
   const latest = realtimeNowMs();
   const earliest = Math.min(
     ...[
@@ -3988,7 +4110,6 @@ function updateRealtimeScrubControl() {
   controls.realtimeScrub.min = String(min);
   controls.realtimeScrub.max = String(max);
   controls.realtimeScrub.value = String(Math.round(realtimeDisplayNowMs()));
-  controls.realtimeLive.classList.toggle('active', !state.realtime.reviewMode);
 }
 
 function setRealtimeReviewCursor(ms) {
@@ -4006,93 +4127,371 @@ function returnRealtimeLive() {
   drawRealtime();
 }
 
-function drawRealtimeLine(samples, key, color, opacity, now = realtimeNowMs()) {
-  if (samples.length < 2) return;
-  const style = state.chartStyle || DefaultChartStyle;
+function createRealtimeGpuShader(gl, type, source) {
+  const shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || 'Unknown shader error';
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
+}
+
+function createRealtimeGpuRenderer() {
+  const gl = realtimeGpuChart.getContext('webgl', {
+    alpha: false,
+    antialias: true,
+    depth: false,
+    stencil: false,
+    premultipliedAlpha: false,
+    preserveDrawingBuffer: false,
+    powerPreference: 'high-performance',
+  }) || realtimeGpuChart.getContext('experimental-webgl');
+  if (!gl) return null;
+
+  try {
+    const vertexShader = createRealtimeGpuShader(gl, gl.VERTEX_SHADER, `
+      attribute vec2 a_position;
+      attribute float a_edge;
+      uniform vec2 u_resolution;
+      varying float v_edge;
+      void main() {
+        vec2 clip = (a_position / u_resolution) * 2.0 - 1.0;
+        gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+        v_edge = a_edge;
+      }
+    `);
+    const fragmentShader = createRealtimeGpuShader(gl, gl.FRAGMENT_SHADER, `
+      precision mediump float;
+      uniform vec4 u_color;
+      uniform float u_core_edge;
+      varying float v_edge;
+      void main() {
+        float coverage = 1.0 - smoothstep(u_core_edge, 1.0, abs(v_edge));
+        gl_FragColor = vec4(u_color.rgb, u_color.a * coverage);
+      }
+    `);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const message = gl.getProgramInfoLog(program) || 'Unknown WebGL link error';
+      gl.deleteProgram(program);
+      throw new Error(message);
+    }
+
+    const createLine = () => ({
+      buffer: gl.createBuffer(),
+      gpuCapacityFloats: 0,
+      points: new Float32Array(256),
+      pointCount: 0,
+      vertices: new Float32Array(768),
+    });
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    return {
+      gl,
+      program,
+      positionLocation: gl.getAttribLocation(program, 'a_position'),
+      edgeLocation: gl.getAttribLocation(program, 'a_edge'),
+      resolutionLocation: gl.getUniformLocation(program, 'u_resolution'),
+      colorLocation: gl.getUniformLocation(program, 'u_color'),
+      coreEdgeLocation: gl.getUniformLocation(program, 'u_core_edge'),
+      lines: [createLine(), createLine(), createLine()],
+    };
+  } catch (error) {
+    console.error('Realtime WebGL renderer unavailable', error);
+    return null;
+  }
+}
+
+function scheduleRealtimeGpuInitialization() {
+  if (realtimeGpuInitRaf) return;
+  realtimeGpuInitRaf = requestAnimationFrame(() => {
+    realtimeGpuInitRaf = requestAnimationFrame(() => {
+      realtimeGpuInitRaf = 0;
+      const panel = document.getElementById('realtimePanel');
+      if (!panel?.classList.contains('active')) return;
+      if (realtimeGpuChart.clientWidth < 2 || realtimeGpuChart.clientHeight < 2) {
+        scheduleRealtimeGpuInitialization();
+        return;
+      }
+      drawRealtime();
+    });
+  });
+}
+
+function ensureRealtimeGpuRenderer() {
+  if (realtimeGpuRenderer) return realtimeGpuRenderer;
+  if (realtimeGpuChart.clientWidth < 2 || realtimeGpuChart.clientHeight < 2) {
+    scheduleRealtimeGpuInitialization();
+    return null;
+  }
+  realtimeGpuRenderer = createRealtimeGpuRenderer();
+  return realtimeGpuRenderer;
+}
+
+function realtimeGpuColor(value, opacity = 1) {
+  let hex = String(value || '').trim();
+  if (hex.startsWith('#')) hex = hex.slice(1);
+  if (hex.length === 3) hex = hex.split('').map((part) => part + part).join('');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return [1, 1, 1, clamp(opacity, 0, 1)];
+  return [
+    Number.parseInt(hex.slice(0, 2), 16) / 255,
+    Number.parseInt(hex.slice(2, 4), 16) / 255,
+    Number.parseInt(hex.slice(4, 6), 16) / 255,
+    clamp(Number(opacity), 0, 1),
+  ];
+}
+
+function realtimeGpuEnsureFloatCapacity(data, required) {
+  if (data.length >= required) return data;
+  let capacity = Math.max(256, data.length || 0);
+  while (capacity < required) capacity *= 2;
+  const expanded = new Float32Array(capacity);
+  expanded.set(data.subarray(0, Math.min(data.length, required)));
+  return expanded;
+}
+
+function realtimeGpuStorePoint(line, x, y) {
+  const offset = line.pointCount * 2;
+  line.points = realtimeGpuEnsureFloatCapacity(line.points, offset + 2);
+  line.points[offset] = x;
+  line.points[offset + 1] = y;
+  line.pointCount++;
+}
+
+function buildRealtimeGpuPath(line, samples, key, now, spanPaddingMs = 100) {
+  line.pointCount = 0;
+  if (samples.length < 2) return 0;
   const ratio = realtimeCanvasRatio();
   const width = realtimeChart.clientWidth || 1;
+  const height = realtimeChart.clientHeight || 1;
   const nowX = width - 14;
-  realtimeCtx.save();
-  realtimeCtx.strokeStyle = hexToRgba(color, opacity);
-  realtimeCtx.lineWidth = 1.5 * ratio;
-  realtimeCtx.setLineDash(dashForStyle(style.totalLine, ratio));
-  realtimeCtx.beginPath();
-  let moved = false;
-  samples.forEach((sample) => {
-    const x = nowX - ((now - sample.tMs) / 1000) * state.realtime.pxPerSecond;
-    const value = key ? sample[key] : sample.value;
-    const y = realtimeY(value);
-    if (x < -20 || x > width + 20 || !finite(y)) return;
-    if (!moved) {
-      realtimeCtx.moveTo(x * ratio, y * ratio);
-      moved = true;
+  const plotTop = 12;
+  const zeroY = Math.max(24, height - 62);
+  const yScale = (zeroY - plotTop) / (state.realtime.yMax || 1);
+  const spanMs = realtimeVisibleSpanMs() + spanPaddingMs;
+  const startIndex = realtimeSampleLowerBound(samples, now - spanMs);
+  const endIndex = realtimeSampleUpperBound(samples, now);
+  if (endIndex - startIndex < 2) return 0;
+  state.realtime.renderPerf.sourcePoints += endIndex - startIndex;
+
+  let column = -1;
+  let columnCount = 0;
+  let minY = 0;
+  let maxY = 0;
+  let lastY = 0;
+  let minOrder = 0;
+  let maxOrder = 0;
+
+  const flushColumn = () => {
+    if (column < 0 || !columnCount) return;
+    if (columnCount === 1 || Math.abs(maxY - minY) < 0.001) {
+      realtimeGpuStorePoint(line, column, lastY);
+    } else if (minOrder <= maxOrder) {
+      realtimeGpuStorePoint(line, column, minY);
+      realtimeGpuStorePoint(line, column, maxY);
     } else {
-      realtimeCtx.lineTo(x * ratio, y * ratio);
+      realtimeGpuStorePoint(line, column, maxY);
+      realtimeGpuStorePoint(line, column, minY);
     }
-  });
-  realtimeCtx.stroke();
-  realtimeCtx.restore();
-}
+    state.realtime.renderPerf.renderedColumns++;
+  };
 
-function realtimeVisibleSamples() {
-  if (!ForcePlateMobileMode) {
-    if (state.realtime.samples.length < 2 &&
-        state.realtime.leftSamples.length < 2 &&
-        state.realtime.rightSamples.length < 2) {
-      return state.realtime.samples;
+  for (let index = startIndex; index < endIndex; index++) {
+    const sample = samples[index];
+    const value = key ? sample[key] : sample.value;
+    if (!finite(value)) continue;
+    const x = nowX - ((now - sample.tMs) / 1000) * state.realtime.pxPerSecond;
+    if (x < -1 || x > width + 1) continue;
+    const nextColumn = Math.round(x * ratio);
+    const y = (zeroY - value * yScale) * ratio;
+    if (!finite(y)) continue;
+    if (nextColumn !== column) {
+      flushColumn();
+      column = nextColumn;
+      columnCount = 1;
+      minY = y;
+      maxY = y;
+      lastY = y;
+      minOrder = 0;
+      maxOrder = 0;
+      continue;
     }
-    const now = realtimeDisplayNowMs();
-    const spanMs = realtimeVisibleSpanMs();
-    return buildRealtimeTotalSamples(now).filter((sample) => now - sample.tMs <= spanMs);
+    const order = columnCount++;
+    if (y < minY) {
+      minY = y;
+      minOrder = order;
+    }
+    if (y > maxY) {
+      maxY = y;
+      maxOrder = order;
+    }
+    lastY = y;
   }
-  const now = realtimeDisplayNowMs();
-  const spanMs = realtimeVisibleSpanMs();
-  return state.realtime.samples.filter((sample) =>
-    sample.tMs <= now && now - sample.tMs <= spanMs
-  );
+  flushColumn();
+  return line.pointCount;
 }
 
-function realtimeVisibleSideSamples(samples, now = realtimeDisplayNowMs()) {
-  const spanMs = realtimeVisibleSpanMs() + 100;
-  return samples.filter((sample) => sample.tMs <= now && now - sample.tMs <= spanMs);
-}
+function buildRealtimeGpuVertices(line, ratio) {
+  const pointCount = line.pointCount;
+  if (pointCount < 2) return 0;
+  const requiredFloats = pointCount * 6;
+  line.vertices = realtimeGpuEnsureFloatCapacity(line.vertices, requiredFloats);
+  const coreHalfWidth = Math.max(0.75, 0.75 * ratio);
+  const featherWidth = Math.max(1, ratio * 0.75);
+  const outerWidth = coreHalfWidth + featherWidth;
 
-function buildRealtimeTotalSamples(now = realtimeDisplayNowMs(), visibleOnly = true) {
-  if (!ForcePlateMobileMode) {
-    if (!state.realtime.leftSamples.length && !state.realtime.rightSamples.length) {
-      if (!visibleOnly) return state.realtime.samples;
-      const spanMs = realtimeVisibleSpanMs() + 100;
-      return state.realtime.samples.filter((sample) => sample.tMs <= now && now - sample.tMs <= spanMs);
+  for (let index = 0; index < pointCount; index++) {
+    const pointOffset = index * 2;
+    const x = line.points[pointOffset];
+    const y = line.points[pointOffset + 1];
+    const previousOffset = Math.max(0, index - 1) * 2;
+    const nextOffset = Math.min(pointCount - 1, index + 1) * 2;
+    let prevDx = x - line.points[previousOffset];
+    let prevDy = y - line.points[previousOffset + 1];
+    let nextDx = line.points[nextOffset] - x;
+    let nextDy = line.points[nextOffset + 1] - y;
+    let prevLength = Math.hypot(prevDx, prevDy);
+    let nextLength = Math.hypot(nextDx, nextDy);
+    if (prevLength < 0.0001) {
+      prevDx = nextDx;
+      prevDy = nextDy;
+      prevLength = nextLength || 1;
     }
-    const spanMs = realtimeVisibleSpanMs() + 100;
-    const events = [
-      ...state.realtime.leftSamples
-        .filter((sample) => sample.tMs <= now && (!visibleOnly || now - sample.tMs <= spanMs))
-        .map((sample) => ({ ...sample, side: 'left' })),
-      ...state.realtime.rightSamples
-        .filter((sample) => sample.tMs <= now && (!visibleOnly || now - sample.tMs <= spanMs))
-        .map((sample) => ({ ...sample, side: 'right' })),
-    ].sort((a, b) => a.tMs - b.tMs || (a.side === 'left' ? -1 : 1));
-    const totalSamples = [];
-    let left = NaN;
-    let right = NaN;
-    events.forEach((event) => {
-      if (event.side === 'left') {
-        left = event.value;
-      } else {
-        right = event.value;
-      }
-      const total = (finite(left) ? left : 0) + (finite(right) ? right : 0);
-      totalSamples.push({ tMs: event.tMs, total });
-      if (finite(total)) state.realtime.totalPeak = Math.max(state.realtime.totalPeak, total);
-    });
-    return totalSamples;
+    if (nextLength < 0.0001) {
+      nextDx = prevDx;
+      nextDy = prevDy;
+      nextLength = prevLength || 1;
+    }
+    prevDx /= prevLength;
+    prevDy /= prevLength;
+    nextDx /= nextLength;
+    nextDy /= nextLength;
+
+    let tangentX = prevDx + nextDx;
+    let tangentY = prevDy + nextDy;
+    const tangentLength = Math.hypot(tangentX, tangentY);
+    if (tangentLength < 0.0001) {
+      tangentX = nextDx;
+      tangentY = nextDy;
+    } else {
+      tangentX /= tangentLength;
+      tangentY /= tangentLength;
+    }
+    const miterX = -tangentY;
+    const miterY = tangentX;
+    const previousNormalX = -prevDy;
+    const previousNormalY = prevDx;
+    let denominator = miterX * previousNormalX + miterY * previousNormalY;
+    if (Math.abs(denominator) < 0.25) denominator = denominator < 0 ? -0.25 : 0.25;
+    let miterLength = outerWidth / denominator;
+    miterLength = clamp(miterLength, -outerWidth * 4, outerWidth * 4);
+    const offsetX = miterX * miterLength;
+    const offsetY = miterY * miterLength;
+    const vertexOffset = index * 6;
+    line.vertices[vertexOffset] = x - offsetX;
+    line.vertices[vertexOffset + 1] = y - offsetY;
+    line.vertices[vertexOffset + 2] = -1;
+    line.vertices[vertexOffset + 3] = x + offsetX;
+    line.vertices[vertexOffset + 4] = y + offsetY;
+    line.vertices[vertexOffset + 5] = 1;
   }
-  if (!visibleOnly) return state.realtime.samples;
-  const spanMs = realtimeVisibleSpanMs() + 100;
-  return state.realtime.samples.filter((sample) =>
-    sample.tMs <= now && now - sample.tMs <= spanMs
-  );
+  return requiredFloats;
+}
+
+function clearRealtimeGpu(style) {
+  const renderer = ensureRealtimeGpuRenderer();
+  if (!renderer) return false;
+  const { gl } = renderer;
+  const background = realtimeGpuColor(style.chartBg, 1);
+  gl.viewport(0, 0, realtimeGpuChart.width, realtimeGpuChart.height);
+  gl.clearColor(background[0], background[1], background[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  return true;
+}
+
+function drawRealtimeGpuLine(samples, key, color, opacity, now, lineIndex) {
+  const renderer = realtimeGpuRenderer;
+  if (!renderer) return;
+  const line = renderer.lines[lineIndex];
+  const pointCount = buildRealtimeGpuPath(line, samples, key, now);
+  if (pointCount < 2) return;
+  const ratio = realtimeCanvasRatio();
+  const floatCount = buildRealtimeGpuVertices(line, ratio);
+  const { gl } = renderer;
+  gl.bindBuffer(gl.ARRAY_BUFFER, line.buffer);
+  if (line.gpuCapacityFloats < floatCount) {
+    let capacity = Math.max(1024, line.gpuCapacityFloats || 0);
+    while (capacity < floatCount) capacity *= 2;
+    gl.bufferData(gl.ARRAY_BUFFER, capacity * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+    line.gpuCapacityFloats = capacity;
+  }
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, line.vertices.subarray(0, floatCount));
+  gl.vertexAttribPointer(renderer.positionLocation, 2, gl.FLOAT, false, 12, 0);
+  gl.vertexAttribPointer(renderer.edgeLocation, 1, gl.FLOAT, false, 12, 8);
+  const rgba = realtimeGpuColor(color, opacity);
+  gl.uniform4f(renderer.colorLocation, rgba[0], rgba[1], rgba[2], rgba[3]);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, pointCount * 2);
+}
+
+function drawRealtimeGpuCurves(leftSamples, rightSamples, now, style) {
+  const renderer = realtimeGpuRenderer;
+  if (!renderer) return false;
+  const { gl } = renderer;
+  gl.useProgram(renderer.program);
+  gl.enableVertexAttribArray(renderer.positionLocation);
+  gl.enableVertexAttribArray(renderer.edgeLocation);
+  gl.uniform2f(renderer.resolutionLocation, realtimeGpuChart.width, realtimeGpuChart.height);
+  const ratio = realtimeCanvasRatio();
+  const coreHalfWidth = Math.max(0.75, 0.75 * ratio);
+  const featherWidth = Math.max(1, ratio * 0.75);
+  gl.uniform1f(renderer.coreEdgeLocation, coreHalfWidth / (coreHalfWidth + featherWidth));
+  drawRealtimeGpuLine(leftSamples, state.realtime.leftSamples.length ? null : 'left',
+    style.leftColor, style.leftOpacity, now, 0);
+  drawRealtimeGpuLine(rightSamples, state.realtime.rightSamples.length ? null : 'right',
+    style.rightColor, style.rightOpacity, now, 1);
+  drawRealtimeGpuLine(state.realtime.samples, 'total', style.totalColor, style.totalOpacity, now, 2);
+  gl.disableVertexAttribArray(renderer.positionLocation);
+  gl.disableVertexAttribArray(renderer.edgeLocation);
+  return true;
+}
+
+function realtimeLatestTotalAt(now) {
+  const samples = state.realtime.samples;
+  if (!samples.length) return NaN;
+  const index = realtimeSampleUpperBound(samples, now) - 1;
+  return index >= 0 ? samples[index].total : NaN;
+}
+
+function realtimeSampleLowerBound(samples, tMs) {
+  let low = 0;
+  let high = samples.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (samples[middle].tMs < tMs) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function realtimeSampleUpperBound(samples, tMs) {
+  let low = 0;
+  let high = samples.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (samples[middle].tMs <= tMs) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
 function realtimeDisciplineLabel(discipline) {
@@ -4456,14 +4855,8 @@ function beginRealtimePan(event) {
 
 function updateRealtimeAutoY() {
   if (!state.realtime.autoY) return;
-  const visible = realtimeVisibleSamples();
-  if (!visible.length) return;
-  const values = [];
-  visible.forEach((sample) => {
-    if (finite(sample.total)) values.push(sample.total);
-  });
-  if (!values.length) return;
-  const max = Math.max(...values, state.realtime.totalPeak || 0, 0);
+  const max = Math.max(state.realtime.totalPeak || 0, 0);
+  if (!max) return;
   const targetMax = Math.max(800, max * 1.16 + 120);
   state.realtime.yMin = 0;
   state.realtime.yMax += (targetMax - state.realtime.yMax) * 0.18;
@@ -4530,7 +4923,7 @@ function drawRealtimePeakLine(width, ratio, style) {
 }
 
 function drawRealtimeCurrentForceLabel(width, ratio) {
-  const current = buildRealtimeTotalSamples(realtimeDisplayNowMs()).at(-1)?.total;
+  const current = realtimeLatestTotalAt(realtimeDisplayNowMs());
   if (!finite(current)) return;
   const zeroY = realtimeY(0);
   const y = clamp(realtimeY(current), 14, zeroY - 10);
@@ -4552,11 +4945,18 @@ function drawRealtimeCurrentForceLabel(width, ratio) {
 
 function realtimeDebugLine(label, stats, nowMs) {
   if (!stats || !stats.count) return `${label}: waiting`;
-  const recentEvents = (stats.events || []).filter((event) => nowMs - event.tMs <= 250);
-  const recentGapMs = recentEvents.length
-    ? recentEvents.reduce((sum, event) => sum + event.gapMs, 0) / recentEvents.length
-    : stats.recentGapMs;
-  const recentDrops = recentEvents.reduce((sum, event) => sum + event.drops, 0);
+  const events = stats.events || [];
+  let recentGapTotalMs = 0;
+  let recentDrops = 0;
+  let recentCount = 0;
+  for (let index = events.length - 1; index >= 0; index--) {
+    const event = events[index];
+    if (nowMs - event.tMs > 250) break;
+    recentGapTotalMs += event.gapMs;
+    recentDrops += event.drops;
+    recentCount++;
+  }
+  const recentGapMs = recentCount ? recentGapTotalMs / recentCount : stats.recentGapMs;
   const ageMs = nowMs - stats.lastArrivalMs;
   return `${label}: ${stats.rate.toFixed(0)} Hz gap ${recentGapMs.toFixed(1)} ms drop ${recentDrops} age ${ageMs.toFixed(0)} ms`;
 }
@@ -4565,7 +4965,9 @@ function updateRealtimeAgeTrail(stats, nowMs) {
   if (!stats || !stats.count) return;
   if (stats.lastAgeTrailMs && nowMs - stats.lastAgeTrailMs < 50) return;
   const ageMs = nowMs - stats.lastArrivalMs;
-  stats.ageTrail = [ageMs, ...(stats.ageTrail || [])].slice(0, 80);
+  if (!stats.ageTrail) stats.ageTrail = [];
+  stats.ageTrail.unshift(ageMs);
+  if (stats.ageTrail.length > 80) stats.ageTrail.length = 80;
   stats.lastAgeTrailMs = nowMs;
 }
 
@@ -4650,12 +5052,29 @@ function realtimeSyncDebugLines(nowMs) {
     : NaN;
   const leftAge = left?.lastArrivalMs ? nowMs - left.lastArrivalMs : NaN;
   const rightAge = right?.lastArrivalMs ? nowMs - right.lastArrivalMs : NaN;
+  const leftTransport = state.realtime.transport.left;
+  const rightTransport = state.realtime.transport.right;
   return [
     `first board L-R: ${finite(firstDelta) ? `${firstDelta.toFixed(1)} ms` : '-'}`,
     `last board L-R: ${finite(lastDelta) ? `${lastDelta.toFixed(1)} ms` : '-'}`,
     `record t0: ${finite(state.realtime.recordStartBoardMs) ? `${Math.round(state.realtime.recordStartBoardMs)} ms` : '-'}`,
     `age L/R: ${finite(leftAge) ? Math.round(leftAge) : '-'} / ${finite(rightAge) ? Math.round(rightAge) : '-'} ms`,
+    `transport L: ${leftTransport.mode} · reconnects ${leftTransport.reconnects}`,
+    `transport R: ${rightTransport.mode} · reconnects ${rightTransport.reconnects}`,
+    `last L: ${leftTransport.lastReason || '-'}`,
+    `last R: ${rightTransport.lastReason || '-'}`,
   ];
+}
+
+function realtimeTransportShort(transport) {
+  const labels = {
+    idle: 'idle',
+    connecting: 'connect',
+    persistent: 'stream',
+    reconnecting: 'reconnect',
+    polling: 'poll',
+  };
+  return `${labels[transport?.mode] || transport?.mode || 'idle'} r${transport?.reconnects || 0}`;
 }
 
 function drawRealtimeDebugHud(width, ratio) {
@@ -4677,7 +5096,11 @@ function drawRealtimeDebugHud(width, ratio) {
 
   const leftText = realtimeDebugLine('L', state.realtime.debug.left, nowMs);
   const rightText = realtimeDebugLine('R', state.realtime.debug.right, nowMs);
-  const intervalText = `poll ${streamIntervalMs()} ms`;
+  const renderPerf = state.realtime.renderPerf;
+  const renderText = renderPerf.fps
+    ? `GPU ${renderPerf.fps.toFixed(0)} fps · ${renderPerf.averageFrameMs.toFixed(1)} ms · max ${renderPerf.maxFrameMs.toFixed(1)}`
+    : 'GPU render waiting';
+  const intervalText = `L ${realtimeTransportShort(state.realtime.transport.left)} · R ${realtimeTransportShort(state.realtime.transport.right)} · ${renderText}`;
   const syncY = 116;
 
   realtimeCtx.save();
@@ -4868,9 +5291,7 @@ function drawScaleRealtime(width, height, ratio) {
     ratio,
     state.realtime.samples.length ? state.realtime.samples : state.realtime.leftSamples,
     'tMs',
-    ForcePlateMobileMode && state.realtime.live
-      ? Math.round(1000 / realtimeSampleIntervalMs())
-      : 0,
+    realtimeRenderRateHz(),
   );
   updateRealtimeScrubControl();
 }
@@ -5069,17 +5490,10 @@ function drawBalancePlate(rect, side, now, ratio, showTrail, emphasized) {
     (rect.x + rect.w) * ratio, (rect.y - 10) * ratio);
 
   const trace = balanceTraceBounds(now);
-  const points = [];
-  for (let index = samples.length - 1; index >= 0; index--) {
-    const sample = samples[index];
-    if (sample.tMs > trace.endTMs) continue;
-    if (sample.tMs < trace.startTMs) break;
-    if (sample.copValid && finite(sample.copX) && finite(sample.copY)) points.push(sample);
-  }
-  points.reverse();
-  const stride = Math.max(1, Math.ceil(points.length / 700));
-  const reduced = points.filter((sample, index) => index % stride === 0 || index === points.length - 1);
-  if (showTrail && reduced.length) {
+  const startIndex = realtimeSampleLowerBound(samples, trace.startTMs);
+  const endIndex = realtimeSampleUpperBound(samples, trace.endTMs);
+  const stride = Math.max(1, Math.ceil((endIndex - startIndex) / 700));
+  if (showTrail && endIndex > startIndex) {
     realtimeCtx.beginPath();
     realtimeCtx.rect(rect.x * ratio, rect.y * ratio, rect.w * ratio, rect.h * ratio);
     realtimeCtx.clip();
@@ -5088,12 +5502,16 @@ function drawBalancePlate(rect, side, now, ratio, showTrail, emphasized) {
     realtimeCtx.lineWidth = 1.8 * ratio;
     realtimeCtx.beginPath();
     let previousSegment = null;
-    reduced.forEach((sample) => {
+    for (let index = startIndex; index < endIndex; index++) {
+      const sample = samples[index];
+      if (!sample.copValid || !finite(sample.copX) || !finite(sample.copY)) continue;
+      const segmentChanged = previousSegment !== sample.segmentId;
+      if (!segmentChanged && index % stride !== 0 && index !== endIndex - 1) continue;
       const point = balancePixel(sample, rect);
-      if (previousSegment !== sample.segmentId) realtimeCtx.moveTo(point.x * ratio, point.y * ratio);
+      if (segmentChanged) realtimeCtx.moveTo(point.x * ratio, point.y * ratio);
       else realtimeCtx.lineTo(point.x * ratio, point.y * ratio);
       previousSegment = sample.segmentId;
-    });
+    }
     realtimeCtx.stroke();
   }
   realtimeCtx.restore();
@@ -5171,28 +5589,30 @@ function balanceGlobalPixel(sample, layout) {
 
 function drawBalanceGlobalTrace(layout, now, ratio) {
   const trace = balanceTraceBounds(now);
-  const points = state.realtime.balanceGlobalSamples.filter(
-    (sample) => sample.tMs >= trace.startTMs && sample.tMs <= trace.endTMs,
-  );
-  const stride = Math.max(1, Math.ceil(points.length / 900));
-  const reduced = points.filter((sample, index) => index % stride === 0 || index === points.length - 1);
-  if (reduced.length) {
+  const samples = state.realtime.balanceGlobalSamples;
+  const startIndex = realtimeSampleLowerBound(samples, trace.startTMs);
+  const endIndex = realtimeSampleUpperBound(samples, trace.endTMs);
+  const stride = Math.max(1, Math.ceil((endIndex - startIndex) / 900));
+  if (endIndex > startIndex) {
     realtimeCtx.save();
     realtimeCtx.strokeStyle = 'rgba(255,255,255,0.72)';
     realtimeCtx.lineWidth = 2 * ratio;
     realtimeCtx.beginPath();
     let previousSegment = null;
-    reduced.forEach((sample) => {
+    for (let index = startIndex; index < endIndex; index++) {
+      const sample = samples[index];
+      const segmentChanged = previousSegment !== sample.segmentId;
+      if (!segmentChanged && index % stride !== 0 && index !== endIndex - 1) continue;
       const point = balanceGlobalPixel(sample, layout);
-      if (previousSegment !== sample.segmentId) realtimeCtx.moveTo(point.x * ratio, point.y * ratio);
+      if (segmentChanged) realtimeCtx.moveTo(point.x * ratio, point.y * ratio);
       else realtimeCtx.lineTo(point.x * ratio, point.y * ratio);
       previousSegment = sample.segmentId;
-    });
+    }
     realtimeCtx.stroke();
     realtimeCtx.restore();
   }
-  if (!state.realtime.balanceGlobalValid || !points.length) return null;
-  const current = points[points.length - 1];
+  if (!state.realtime.balanceGlobalValid || endIndex <= startIndex) return null;
+  const current = samples[endIndex - 1];
   const point = balanceGlobalPixel(current, layout);
   realtimeCtx.save();
   realtimeCtx.shadowColor = '#fff';
@@ -5298,16 +5718,26 @@ function drawEyesClosedBalanceRealtime(width, height, ratio) {
 }
 
 function drawRealtime() {
-  resizeRealtimeCanvas();
-  const ratio = realtimeCanvasRatio();
-  const width = realtimeChart.clientWidth || 1;
-  const height = realtimeChart.clientHeight || 1;
-  const style = state.chartStyle || DefaultChartStyle;
-  realtimeCtx.clearRect(0, 0, realtimeChart.width, realtimeChart.height);
-  realtimeCtx.fillStyle = style.chartBg;
-  realtimeCtx.fillRect(0, 0, width * ratio, height * ratio);
-  realtimeCtx.strokeStyle = style.chartOutline;
-  realtimeCtx.strokeRect(0.5 * ratio, 0.5 * ratio, (width - 1) * ratio, (height - 1) * ratio);
+  const renderStartedMs = performance.now();
+  const renderPerf = state.realtime.renderPerf;
+  renderPerf.sourcePoints = 0;
+  renderPerf.renderedColumns = 0;
+  try {
+    resizeRealtimeCanvas();
+    const ratio = realtimeCanvasRatio();
+    const width = realtimeChart.clientWidth || 1;
+    const height = realtimeChart.clientHeight || 1;
+    const style = state.chartStyle || DefaultChartStyle;
+    renderPerf.canvasWidth = realtimeChart.width;
+    renderPerf.canvasHeight = realtimeChart.height;
+    const gpuReady = clearRealtimeGpu(style);
+    realtimeCtx.clearRect(0, 0, realtimeChart.width, realtimeChart.height);
+    if (!gpuReady || isEyesClosedBalance() || isScaleDiscipline()) {
+      realtimeCtx.fillStyle = style.chartBg;
+      realtimeCtx.fillRect(0, 0, width * ratio, height * ratio);
+    }
+    realtimeCtx.strokeStyle = style.chartOutline;
+    realtimeCtx.strokeRect(0.5 * ratio, 0.5 * ratio, (width - 1) * ratio, (height - 1) * ratio);
 
   if (isEyesClosedBalance()) {
     drawEyesClosedBalanceRealtime(width, height, ratio);
@@ -5350,16 +5780,19 @@ function drawRealtime() {
 
   const now = realtimeDisplayNowMs();
   const leftLine = state.realtime.leftSamples.length
-    ? realtimeVisibleSideSamples(state.realtime.leftSamples, now)
+    ? state.realtime.leftSamples
     : state.realtime.samples;
   const rightLine = state.realtime.rightSamples.length
-    ? realtimeVisibleSideSamples(state.realtime.rightSamples, now)
+    ? state.realtime.rightSamples
     : state.realtime.samples;
-  const totalLine = buildRealtimeTotalSamples(now);
+  drawRealtimeGpuCurves(leftLine, rightLine, now, style);
   drawRealtimeSegments(now, width, height, ratio, style);
-  drawRealtimeLine(leftLine, state.realtime.leftSamples.length ? null : 'left', style.leftColor, style.leftOpacity, now);
-  drawRealtimeLine(rightLine, state.realtime.rightSamples.length ? null : 'right', style.rightColor, style.rightOpacity, now);
-  drawRealtimeLine(totalLine, 'total', style.totalColor, style.totalOpacity, now);
+  if (!gpuReady) {
+    realtimeCtx.fillStyle = 'rgba(255,147,9,0.92)';
+    realtimeCtx.font = `600 ${14 * ratio}px Trebuchet MS, Arial, sans-serif`;
+    realtimeCtx.textAlign = 'center';
+    realtimeCtx.fillText('GPU RENDERER UNAVAILABLE', width * 0.5 * ratio, height * 0.5 * ratio);
+  }
   drawRealtimePeakLine(width, ratio, style);
   drawRealtimeCurrentForceLabel(width, ratio);
   drawRealtimeDebugHud(width, ratio);
@@ -5371,11 +5804,12 @@ function drawRealtime() {
     ratio,
     state.realtime.samples.length ? state.realtime.samples : state.realtime.leftSamples,
     'tMs',
-    ForcePlateMobileMode && state.realtime.live
-      ? Math.round(1000 / realtimeSampleIntervalMs())
-      : 0,
+    realtimeRenderRateHz(),
   );
-  updateRealtimeScrubControl();
+    updateRealtimeScrubControl();
+  } finally {
+    recordRealtimeRenderPerformance(renderStartedMs);
+  }
 }
 
 function realtimeSampleFromRow(row, fallbackTMs) {
@@ -5426,11 +5860,23 @@ function parseLocalRealtimeCsvLine(line) {
   return finite(sample.side) && finite(sample.absN) ? sample : null;
 }
 
-function resetRealtimeDebug() {
+function resetRealtimeDebug(preserveTransport = false) {
   state.realtime.debug = {
     left: null,
     right: null,
   };
+  if (!preserveTransport) {
+    state.realtime.transport = {
+      left: { mode: 'idle', reconnects: 0, lastReason: '' },
+      right: { mode: 'idle', reconnects: 0, lastReason: '' },
+    };
+  }
+}
+
+function realtimeTransport(boardLabel) {
+  return boardLabel.startsWith('Master')
+    ? state.realtime.transport.left
+    : state.realtime.transport.right;
 }
 
 function updateRealtimeDebug(localSample) {
@@ -5542,35 +5988,16 @@ function appendLocalRealtimeSample(localSample) {
     state.realtime.liveLatestLeft = localSample.absN;
     state.realtime.balanceLatestLeft = sideSample;
     state.realtime.leftSamples.push(sideSample);
-    if (ForcePlateMobileMode) {
-      state.realtime.merge.pending[0].push(sideSample);
-      state.realtime.merge.latestTMs[0] = tMs;
-      state.realtime.merge.arrivalMs[0] = performance.now();
-    }
+    state.realtime.merge.pending[0].push(sideSample);
+    state.realtime.merge.latestTMs[0] = tMs;
+    state.realtime.merge.arrivalMs[0] = performance.now();
   } else if (localSample.side === 1) {
     state.realtime.liveLatestRight = localSample.absN;
     state.realtime.balanceLatestRight = sideSample;
     state.realtime.rightSamples.push(sideSample);
-    if (ForcePlateMobileMode) {
-      state.realtime.merge.pending[1].push(sideSample);
-      state.realtime.merge.latestTMs[1] = tMs;
-      state.realtime.merge.arrivalMs[1] = performance.now();
-    }
-  }
-  if (!ForcePlateMobileMode &&
-      (finite(state.realtime.liveLatestLeft) || finite(state.realtime.liveLatestRight))) {
-    const leftValue = finite(state.realtime.liveLatestLeft) ? state.realtime.liveLatestLeft : 0;
-    const rightValue = finite(state.realtime.liveLatestRight) ? state.realtime.liveLatestRight : 0;
-    const totalSample = {
-      tMs,
-      left: leftValue,
-      right: rightValue,
-      total: leftValue + rightValue,
-    };
-    state.realtime.samples.push(totalSample);
-    state.realtime.totalPeak = Math.max(state.realtime.totalPeak, totalSample.total);
-    if (!isScaleDiscipline()) scanRealtimeDetector(totalSample);
-    if (isEyesClosedBalance()) appendBalanceGlobalSample(tMs);
+    state.realtime.merge.pending[1].push(sideSample);
+    state.realtime.merge.latestTMs[1] = tMs;
+    state.realtime.merge.arrivalMs[1] = performance.now();
   }
   if (!state.realtime.reviewMode) state.realtime.cursorMs = tMs;
 }
@@ -5587,6 +6014,7 @@ function flushRealtimeMergedSamples() {
     active.forEach((isActive, side) => {
       if (isActive) return;
       merge.pending[side] = [];
+      merge.pendingHead[side] = 0;
       merge.latestTMs[side] = NaN;
       merge.values[side] = NaN;
     });
@@ -5599,8 +6027,8 @@ function flushRealtimeMergedSamples() {
   if (!finite(watermark)) return;
 
   while (true) {
-    const leftTMs = merge.pending[0][0]?.tMs;
-    const rightTMs = merge.pending[1][0]?.tMs;
+    const leftTMs = merge.pending[0][merge.pendingHead[0]]?.tMs;
+    const rightTMs = merge.pending[1][merge.pendingHead[1]]?.tMs;
     const nextTMs = Math.min(
       finite(leftTMs) ? leftTMs : Infinity,
       finite(rightTMs) ? rightTMs : Infinity,
@@ -5608,8 +6036,10 @@ function flushRealtimeMergedSamples() {
     if (!finite(nextTMs) || nextTMs > watermark) break;
 
     for (let side = 0; side < 2; side++) {
-      while (merge.pending[side].length && merge.pending[side][0].tMs <= nextTMs) {
-        merge.values[side] = merge.pending[side].shift().value;
+      const pending = merge.pending[side];
+      while (merge.pendingHead[side] < pending.length &&
+             pending[merge.pendingHead[side]].tMs <= nextTMs) {
+        merge.values[side] = pending[merge.pendingHead[side]++].value;
       }
     }
     if (nextTMs < merge.lastTMs) continue;
@@ -5623,6 +6053,17 @@ function flushRealtimeMergedSamples() {
     if (!isScaleDiscipline()) scanRealtimeDetector(totalSample);
     if (isEyesClosedBalance()) appendBalanceGlobalSample(nextTMs);
   }
+  for (let side = 0; side < 2; side++) {
+    const head = merge.pendingHead[side];
+    const pending = merge.pending[side];
+    if (head === pending.length) {
+      pending.length = 0;
+      merge.pendingHead[side] = 0;
+    } else if (head >= 2048) {
+      merge.pending[side] = pending.slice(head);
+      merge.pendingHead[side] = 0;
+    }
+  }
 }
 
 function trimRealtimeSamples() {
@@ -5631,12 +6072,21 @@ function trimRealtimeSamples() {
       !state.realtime.rightSamples.length) {
     return;
   }
+  const trimClockMs = performance.now();
+  if (trimClockMs - state.realtime.lastTrimMs < 5000) return;
+  state.realtime.lastTrimMs = trimClockMs;
   const now = realtimeNowMs();
   const keepMs = state.realtime.historyMs;
-  state.realtime.samples = state.realtime.samples.filter((sample) => now - sample.tMs <= keepMs);
-  state.realtime.leftSamples = state.realtime.leftSamples.filter((sample) => now - sample.tMs <= keepMs);
-  state.realtime.rightSamples = state.realtime.rightSamples.filter((sample) => now - sample.tMs <= keepMs);
-  state.realtime.balanceGlobalSamples = state.realtime.balanceGlobalSamples.filter((sample) => now - sample.tMs <= keepMs);
+  const firstKeptMs = now - keepMs;
+  [
+    state.realtime.samples,
+    state.realtime.leftSamples,
+    state.realtime.rightSamples,
+    state.realtime.balanceGlobalSamples,
+  ].forEach((samples) => {
+    const removeCount = realtimeSampleLowerBound(samples, firstKeptMs);
+    if (removeCount) samples.splice(0, removeCount);
+  });
   state.realtime.detector.segments = state.realtime.detector.segments.filter((segment) => now - segment.endMs <= keepMs);
 }
 
@@ -5890,9 +6340,30 @@ function decodeRealtimeStreamBytes(pending, incoming) {
 async function startRealtimeBoard(baseValue, sync = false, filter = null) {
   const startUrl = localBatchStartUrl(baseValue, sync, filter);
   const stopUrl = localBatchStopUrl(baseValue, sync);
-  const response = await fetch(startUrl, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`${startUrl}: HTTP ${response.status}`);
-  state.realtime.stopUrls.push(stopUrl);
+  let lastError = null;
+  for (let attempt = 1; attempt <= RealtimeStartRequestAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), RealtimeStartRequestTimeoutMs);
+    try {
+      const response = await fetch(startUrl, { cache: 'no-store', signal: controller.signal });
+      if (!response.ok) {
+        const detail = (await response.text().catch(() => '')).trim();
+        throw new Error(`${detail || `HTTP ${response.status}`} (${attempt}/${RealtimeStartRequestAttempts})`);
+      }
+      state.realtime.stopUrls.push(stopUrl);
+      return;
+    } catch (error) {
+      lastError = error.name === 'AbortError'
+        ? new Error(`start timeout ${RealtimeStartRequestTimeoutMs} ms`)
+        : error;
+      if (attempt >= RealtimeStartRequestAttempts) break;
+      setStatus(`ForcePlate RT start retry ${attempt}/${RealtimeStartRequestAttempts}: ${lastError.message}`);
+      await new Promise((resolve) => window.setTimeout(resolve, 150 * attempt));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+  throw new Error(`${startUrl}: ${lastError?.message || 'start failed'}`);
 }
 
 function realtimeRunSnapshot() {
@@ -6043,7 +6514,7 @@ function prepareRealtimeRecording({ warmupMs = realtimeWarmupMs() } = {}) {
   state.realtime.preflight.remainingSec = 0;
   resetBalanceTrial();
   resetRealtimeDetector(false);
-  resetRealtimeDebug();
+  resetRealtimeDebug(true);
   drawRealtime();
 }
 
@@ -6878,6 +7349,9 @@ async function pollRealtimeBatchLoop(baseValue, abort, boardLabel) {
   let afterSeq = 0;
   let consecutiveErrors = 0;
   let mobileEndpoint = ForcePlatePersistentRealtime;
+  const transport = realtimeTransport(boardLabel);
+  transport.mode = 'polling';
+  if (!transport.lastReason) transport.lastReason = 'compatibility polling';
   while (state.realtime.live && !abort.signal.aborted) {
     try {
       const response = await fetch(localBatchUrl(baseValue, afterSeq, mobileEndpoint), {
@@ -6894,7 +7368,7 @@ async function pollRealtimeBatchLoop(baseValue, abort, boardLabel) {
         appendLocalRealtimeSample(sample);
         afterSeq = sample.streamSeq;
       });
-      if (ForcePlateMobileMode) flushRealtimeMergedSamples();
+      flushRealtimeMergedSamples();
       consecutiveErrors = 0;
       trimRealtimeSamples();
       drawRealtimeFromReceiver();
@@ -6907,6 +7381,8 @@ async function pollRealtimeBatchLoop(baseValue, abort, boardLabel) {
     } catch (error) {
       if (abort.signal.aborted || error.name === 'AbortError') return;
       consecutiveErrors++;
+      transport.reconnects++;
+      transport.lastReason = error.message || 'poll request failed';
       if (consecutiveErrors === 1) {
         setStatus(`${boardLabel} unavailable; continuing RT with the connected ForcePlate.`);
       }
@@ -6919,6 +7395,10 @@ async function consumeRealtimePersistentBinaryStream(baseValue, abort, boardLabe
   let afterSeq = 0;
   let streamEstablished = false;
   let reconnectErrors = 0;
+  let initialErrors = 0;
+  const transport = realtimeTransport(boardLabel);
+  transport.mode = 'connecting';
+  transport.lastReason = '';
 
   while (state.realtime.live && !abort.signal.aborted) {
     const streamAbort = new AbortController();
@@ -6932,11 +7412,17 @@ async function consumeRealtimePersistentBinaryStream(baseValue, abort, boardLabe
         signal: streamAbort.signal,
       });
       window.clearTimeout(connectTimeout);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`);
+        error.httpStatus = response.status;
+        throw error;
+      }
       if (!response.body) throw new Error('stream body unavailable');
 
       streamEstablished = true;
+      initialErrors = 0;
       reconnectErrors = 0;
+      transport.mode = 'persistent';
       let pending = new Uint8Array(0);
       const reader = response.body.getReader();
       while (state.realtime.live && !abort.signal.aborted) {
@@ -6960,11 +7446,24 @@ async function consumeRealtimePersistentBinaryStream(baseValue, abort, boardLabe
     } catch (error) {
       window.clearTimeout(connectTimeout);
       if (abort.signal.aborted || !state.realtime.live) return;
+      transport.reconnects++;
+      transport.lastReason = error.message || 'persistent stream interrupted';
       if (!streamEstablished) {
-        setStatus(`${boardLabel} persistent stream unavailable; using compatibility polling.`);
-        return pollRealtimeBatchLoop(baseValue, abort, boardLabel);
+        initialErrors++;
+        const fallback = error.httpStatus === 404 ||
+          initialErrors >= RealtimePersistentInitialAttempts;
+        if (fallback) {
+          transport.mode = 'polling';
+          setStatus(`${boardLabel} persistent stream unavailable after ${initialErrors} attempt(s); using compatibility polling.`);
+          return pollRealtimeBatchLoop(baseValue, abort, boardLabel);
+        }
+        transport.mode = 'connecting';
+        setStatus(`${boardLabel} persistent stream retry ${initialErrors}/${RealtimePersistentInitialAttempts}.`);
+        await abortableDelay(Math.min(1000, 150 * initialErrors), abort);
+        continue;
       }
       reconnectErrors++;
+      transport.mode = 'reconnecting';
       if (reconnectErrors === 1) {
         setStatus(`${boardLabel} stream interrupted; reconnecting from sample ${afterSeq}.`);
       }
@@ -6995,6 +7494,7 @@ async function consumeLocalRealtimeStream(url, abort) {
       const sample = parseLocalRealtimeCsvLine(line.trim());
       if (sample) appendLocalRealtimeSample(sample);
     });
+    flushRealtimeMergedSamples();
     trimRealtimeSamples();
     const nowMs = performance.now();
     if (nowMs - lastDrawMs > 16) {
@@ -7136,11 +7636,14 @@ async function startRealtimeStream() {
 
 function resetRealtimeSimulation() {
   stopRealtimeRenderLoop();
+  resetRealtimeRenderPerformance();
   state.realtime.samples = [];
   state.realtime.leftSamples = [];
   state.realtime.rightSamples = [];
+  state.realtime.lastTrimMs = 0;
   state.realtime.merge = {
     pending: [[], []],
+    pendingHead: [0, 0],
     latestTMs: [NaN, NaN],
     arrivalMs: [0, 0],
     values: [NaN, NaN],
@@ -9381,12 +9884,39 @@ function startMeasurementStatusPolling() {
   state.measurementPoll.active = true;
   renderMeasurementRunState();
   state.measurementPoll.lastStateText = '';
+  state.measurementPoll.lastDiagnosticsText = '';
   state.measurementPoll.timer = setInterval(() => {
     pollMeasurementStatus().catch((error) => {
       stopMeasurementStatusPolling();
       setStatus(`Measurement status error: ${error.message}`);
     });
   }, 450);
+}
+
+function measurementDiagnosticsText(diagnostics) {
+  const data = diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
+  const remoteAgeMs = Number(data.remoteAgeMs);
+  const remoteText = Number.isFinite(remoteAgeMs) && remoteAgeMs >= 0
+    ? `slave age ${Math.round(remoteAgeMs)} ms`
+    : 'slave unseen';
+  const stableSec = Math.max(0, Number(data.stableBaselineMs) || 0) / 1000;
+  const stateSec = Math.max(0, Number(data.stateElapsedMs) || 0) / 1000;
+  switch (data.gate) {
+    case 'READY_PREP':
+      return `Ready preparation ${stateSec.toFixed(1)} / 3.0 s · ${remoteText}`;
+    case 'STABLE_BASELINE':
+      return `Stable baseline ${stableSec.toFixed(1)} / 1.0 s · ${remoteText}`;
+    case 'STABLE_BASELINE_PAIR_STALE':
+      return `Slave data stale · baseline ${stableSec.toFixed(1)} / 1.0 s · ${remoteText}`;
+    case 'CLOCK_SYNC_PENDING':
+      return `Clock sync pending · ${remoteText}`;
+    case 'CLOCK_SYNC_RETRY':
+      return `Clock sync ${Number(data.clockSyncValidSamples) || 0}/9 · failed cycles ${Number(data.clockSyncFailures) || 0}`;
+    case 'DROP_READY_TIMER':
+      return `Drop Jump ready ${stateSec.toFixed(1)} / 8.0 s · ${remoteText}`;
+    default:
+      return '';
+  }
 }
 
 async function pollMeasurementStatus() {
@@ -9405,10 +9935,13 @@ async function pollMeasurementStatus() {
     renderAthleteMassControls();
   }
   const stateText = status.instruction || status.state || 'Measuring';
-  if (stateText !== state.measurementPoll.lastStateText) {
+  const diagnosticsText = measurementDiagnosticsText(status.diagnostics);
+  if (stateText !== state.measurementPoll.lastStateText ||
+      diagnosticsText !== state.measurementPoll.lastDiagnosticsText) {
     state.measurementPoll.lastStateText = stateText;
+    state.measurementPoll.lastDiagnosticsText = diagnosticsText;
     renderDeviceState();
-    setStatus(`Measurement: ${stateText}`);
+    setStatus(`Measurement: ${stateText}${diagnosticsText ? ` · ${diagnosticsText}` : ''}`);
   }
   const revision = Number(status.revision) || 0;
   if (status.traceReady && revision && revision !== state.measurementPoll.lastFetchedRevision) {
@@ -9761,10 +10294,9 @@ controls.realtimeAutoY.addEventListener('change', () => {
 });
 controls.realtimeRenderBuffer.addEventListener('change', () => {
   syncRealtimeRenderBufferControls();
-  if (state.realtime.renderBuffer.enabled) {
+  if (state.realtime.live) {
     startRealtimeRenderLoop();
   } else {
-    stopRealtimeRenderLoop();
     state.realtime.renderBuffer.cursorMs = realtimeNowMs();
     drawRealtime();
   }

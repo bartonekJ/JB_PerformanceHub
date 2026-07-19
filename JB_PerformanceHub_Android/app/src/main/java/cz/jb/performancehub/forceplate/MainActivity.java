@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
             resultsFolderUri = Uri.parse(storedResultsUri);
         }
         configureWebView();
+        webView.clearCache(true);
         bindAppToWifi();
         setContentView(webView);
         webView.post(this::enterImmersiveMode);
@@ -131,6 +132,7 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         settings.setAllowFileAccessFromFileURLs(true);
