@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly string _dataDirectory;
     private readonly string _resultsDirectory;
     private readonly LocalStore _localStore;
+    private readonly ReliableRealtimeReceiver _reliableRealtime;
     private WindowStyle _windowStyleBeforeFullscreen;
     private WindowState _windowStateBeforeFullscreen;
     private ResizeMode _resizeModeBeforeFullscreen;
@@ -27,7 +28,11 @@ public partial class MainWindow : Window
         _dataDirectory = Path.Combine(AppContext.BaseDirectory, "Data");
         _resultsDirectory = Path.Combine(AppContext.BaseDirectory, "Results");
         _localStore = new LocalStore(Path.Combine(_dataDirectory, "PerformanceHubLocal.db"));
+        _reliableRealtime = new ReliableRealtimeReceiver(
+            SendReliableRealtimeBatch,
+            SendReliableRealtimeStatus);
         Loaded += OnLoaded;
+        Closed += (_, _) => _reliableRealtime.Stop();
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -126,12 +131,51 @@ public partial class MainWindow : Window
                 case "performancehub.results.pick":
                     PickResultFiles(root);
                     break;
+                case "performancehub.forceplate.realtime.start":
+                    if (!root.TryGetProperty("masterUrl", out var masterUrlElement)
+                        || !root.TryGetProperty("slaveUrl", out var slaveUrlElement)) return;
+                    var masterUrl = masterUrlElement.GetString();
+                    var slaveUrl = slaveUrlElement.GetString();
+                    if (string.IsNullOrWhiteSpace(masterUrl) || string.IsNullOrWhiteSpace(slaveUrl)) return;
+                    _reliableRealtime.Start(masterUrl, slaveUrl);
+                    break;
+                case "performancehub.forceplate.realtime.stop":
+                    _reliableRealtime.Stop();
+                    break;
             }
         }
         catch (Exception error)
         {
             await LogAsync($"Native message failed: {error}");
         }
+    }
+
+    private void SendReliableRealtimeBatch(string boardLabel, byte[] batch)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (Browser.CoreWebView2 is null) return;
+            Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            {
+                type = "performancehub.forceplate.realtime.batch",
+                boardLabel,
+                base64 = Convert.ToBase64String(batch),
+            }));
+        });
+    }
+
+    private void SendReliableRealtimeStatus(string boardLabel, string status)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (Browser.CoreWebView2 is null) return;
+            Browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+            {
+                type = "performancehub.forceplate.realtime.status",
+                boardLabel,
+                status,
+            }));
+        });
     }
 
     private async Task SaveResultFileAsync(JsonElement message)

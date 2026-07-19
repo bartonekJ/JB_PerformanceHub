@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback wifiNetworkCallback;
     private Network boundWifiNetwork;
+    private ReliableRealtimeReceiver reliableRealtimeReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,6 +74,19 @@ public class MainActivity extends Activity {
             resultsFolderUri = Uri.parse(storedResultsUri);
         }
         configureWebView();
+        reliableRealtimeReceiver = new ReliableRealtimeReceiver(
+            () -> boundWifiNetwork,
+            new ReliableRealtimeReceiver.Listener() {
+                @Override
+                public void onBatch(String boardLabel, byte[] batch) {
+                    sendReliableRealtimeBatch(boardLabel, batch);
+                }
+
+                @Override
+                public void onStatus(String boardLabel, String status) {
+                    sendReliableRealtimeStatus(boardLabel, status);
+                }
+            });
         webView.clearCache(true);
         bindAppToWifi();
         setContentView(webView);
@@ -235,6 +249,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void chooseResultsFolder() {
             runOnUiThread(MainActivity.this::launchResultsFolderPicker);
+        }
+
+        @JavascriptInterface
+        public boolean startReliableRealtime(String masterUrl, String slaveUrl) {
+            try {
+                reliableRealtimeReceiver.start(masterUrl, slaveUrl);
+                return true;
+            } catch (Exception error) {
+                showToast("Cannot start ForcePlate realtime receiver");
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public void stopReliableRealtime() {
+            reliableRealtimeReceiver.stop();
         }
 
         private String sanitizeFilename(String filename) {
@@ -434,6 +464,21 @@ public class MainActivity extends Activity {
             null));
     }
 
+    private void sendReliableRealtimeBatch(String boardLabel, byte[] batch) {
+        String base64 = Base64.encodeToString(batch, Base64.NO_WRAP);
+        String script = "window.JBForcePlateReliableRealtimeBatch && "
+            + "window.JBForcePlateReliableRealtimeBatch("
+            + JSONObject.quote(boardLabel) + "," + JSONObject.quote(base64) + ")";
+        webView.post(() -> webView.evaluateJavascript(script, null));
+    }
+
+    private void sendReliableRealtimeStatus(String boardLabel, String status) {
+        String script = "window.JBForcePlateReliableRealtimeStatus && "
+            + "window.JBForcePlateReliableRealtimeStatus("
+            + JSONObject.quote(boardLabel) + "," + JSONObject.quote(status) + ")";
+        webView.post(() -> webView.evaluateJavascript(script, null));
+    }
+
     private void showToast(String message) {
         runOnUiThread(() -> Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show());
     }
@@ -492,6 +537,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
+        if (reliableRealtimeReceiver != null) reliableRealtimeReceiver.stop();
         if (connectivityManager != null && wifiNetworkCallback != null) {
             connectivityManager.unregisterNetworkCallback(wifiNetworkCallback);
             connectivityManager.bindProcessToNetwork(null);

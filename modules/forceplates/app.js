@@ -3,6 +3,8 @@ const ForcePlateNativeWindows = window.JBPerformanceHubNative?.platform === 'win
 const ForcePlatePersistentRealtime = ForcePlateMobileMode || ForcePlateNativeWindows;
 const ForcePlateNativeAndroid = Boolean(window.JBForcePlateAndroid);
 const ForcePlateNativeResults = ForcePlateNativeWindows || ForcePlateNativeAndroid;
+const ForcePlateReliableRealtime = (ForcePlateNativeWindows || ForcePlateNativeAndroid)
+  && new URLSearchParams(window.location.search).get('rtTransport') !== 'tcp';
 const RealtimeBatchRequestSamples = 96;
 const RealtimeMobileStreamPort = 8081;
 const RealtimeStartRequestAttempts = 4;
@@ -17,6 +19,14 @@ let PendingNativeResultsAction = '';
 if (ForcePlateNativeWindows && window.chrome?.webview) {
   window.chrome.webview.addEventListener('message', (event) => {
     const message = event.data;
+    if (message?.type === 'performancehub.forceplate.realtime.batch') {
+      acceptNativeReliableRealtimeBatch(message.boardLabel, message.base64);
+      return;
+    }
+    if (message?.type === 'performancehub.forceplate.realtime.status') {
+      acceptNativeReliableRealtimeStatus(message.boardLabel, message.status);
+      return;
+    }
     if (message?.type !== 'performancehub.results.response' || !message.requestId) return;
     const pending = NativeResultsRequests.get(message.requestId);
     if (!pending) return;
@@ -26,6 +36,9 @@ if (ForcePlateNativeWindows && window.chrome?.webview) {
     else pending.reject(new Error(message.error || 'Native Results operation failed'));
   });
 }
+
+window.JBForcePlateReliableRealtimeBatch = acceptNativeReliableRealtimeBatch;
+window.JBForcePlateReliableRealtimeStatus = acceptNativeReliableRealtimeStatus;
 
 const state = {
   rows: [],
@@ -5111,6 +5124,7 @@ function realtimeTransportShort(transport) {
     idle: 'idle',
     connecting: 'connect',
     persistent: 'stream',
+    reliable: 'udp',
     reconnecting: 'reconnect',
     polling: 'poll',
   };
@@ -6271,6 +6285,7 @@ async function stopRealtimeStream(statusText = 'Realtime stopped') {
   const aborts = Array.isArray(state.realtime.liveAbort)
     ? state.realtime.liveAbort
     : [state.realtime.liveAbort].filter(Boolean);
+  stopNativeReliableRealtime();
   aborts.forEach((abort) => abort.abort());
   state.realtime.liveAbort = [];
   state.realtime.live = false;
@@ -6376,6 +6391,108 @@ function decodeRealtimeStreamBytes(pending, incoming) {
   }
 
   return { pending: bytes.slice(offset), batches };
+}
+
+function nativeReliableRealtimeBytes(base64) {
+  const binary = window.atob(String(base64 || ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function acceptNativeReliableRealtimeBatch(boardLabel, base64) {
+  if (!ForcePlateReliableRealtime || !state.realtime.live) return;
+  const transport = realtimeTransport(String(boardLabel || ''));
+  try {
+    const bytes = nativeReliableRealtimeBytes(base64);
+    const batch = decodeRealtimeBatch(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    );
+    batch.samples.forEach(appendLocalRealtimeSample);
+    if (!batch.samples.length) return;
+    transport.mode = 'reliable';
+    flushRealtimeMergedSamples();
+    trimRealtimeSamples();
+    drawRealtimeFromReceiver();
+  } catch (error) {
+    transport.lastReason = `native packet: ${error.message}`;
+  }
+}
+
+function acceptNativeReliableRealtimeStatus(boardLabel, status) {
+  if (!ForcePlateReliableRealtime) return;
+  const transport = realtimeTransport(String(boardLabel || ''));
+  const value = String(status || '');
+  transport.mode = value.startsWith('reconnecting') || value.startsWith('socket retry')
+    ? 'reconnecting'
+    : value === 'connecting'
+      ? 'connecting'
+      : 'reliable';
+  transport.lastReason = value;
+  if (value.startsWith('socket retry')) transport.reconnects++;
+}
+
+function startNativeReliableRealtime(masterUrl, slaveUrl, abort) {
+  if (ForcePlateNativeWindows && window.chrome?.webview) {
+    window.chrome.webview.postMessage({
+      type: 'performancehub.forceplate.realtime.start',
+      masterUrl,
+      slaveUrl,
+    });
+  } else if (ForcePlateNativeAndroid
+      && typeof window.JBForcePlateAndroid.startReliableRealtime === 'function') {
+    const started = window.JBForcePlateAndroid.startReliableRealtime(masterUrl, slaveUrl);
+    if (!started) throw new Error('Android reliable realtime receiver did not start');
+  } else {
+    throw new Error('Native reliable realtime receiver is unavailable');
+  }
+
+  state.realtime.transport.left.mode = 'connecting';
+  state.realtime.transport.right.mode = 'connecting';
+  return new Promise((resolve) => {
+    const stop = () => {
+      stopNativeReliableRealtime();
+      resolve();
+    };
+    if (abort.signal.aborted) stop();
+    else abort.signal.addEventListener('abort', stop, { once: true });
+  });
+}
+
+async function consumeNativeReliableRealtimeWithFallback(masterUrl, slaveUrl, masterAbort, slaveAbort) {
+  const nativeLifetime = startNativeReliableRealtime(masterUrl, slaveUrl, masterAbort);
+  const deadlineMs = performance.now() + 1800;
+  let started = false;
+  while (state.realtime.live
+      && !masterAbort.signal.aborted
+      && performance.now() < deadlineMs) {
+    if (state.realtime.transport.left.mode === 'reliable'
+        || state.realtime.transport.right.mode === 'reliable') {
+      started = true;
+      break;
+    }
+    await abortableDelay(25, masterAbort);
+  }
+  if (started || masterAbort.signal.aborted || !state.realtime.live) return nativeLifetime;
+
+  stopNativeReliableRealtime();
+  state.realtime.transport.left.lastReason = 'UDP unavailable; TCP fallback';
+  state.realtime.transport.right.lastReason = 'UDP unavailable; TCP fallback';
+  setStatus('Reliable packet stream unavailable; using persistent TCP compatibility stream.');
+  return Promise.all([
+    consumeRealtimePersistentBinaryStream(masterUrl, masterAbort, 'Master / Left'),
+    consumeRealtimePersistentBinaryStream(slaveUrl, slaveAbort, 'Right / Slave'),
+  ]);
+}
+
+function stopNativeReliableRealtime() {
+  if (!ForcePlateReliableRealtime) return;
+  if (ForcePlateNativeWindows && window.chrome?.webview) {
+    window.chrome.webview.postMessage({ type: 'performancehub.forceplate.realtime.stop' });
+  } else if (ForcePlateNativeAndroid
+      && typeof window.JBForcePlateAndroid.stopReliableRealtime === 'function') {
+    window.JBForcePlateAndroid.stopReliableRealtime();
+  }
 }
 
 async function startRealtimeBoard(baseValue, sync = false, filter = null) {
@@ -7589,9 +7706,11 @@ async function startRealtimeStream() {
     ? scaleRun
       ? 'Scale: step on the ForcePlate(s) and stand still'
       : 'Body mass unknown: step on the ForcePlate(s) and stand still'
-    : ForcePlatePersistentRealtime
-      ? 'Persistent binary realtime stream'
-      : `Batch realtime sync ${streamIntervalMs()} ms`);
+    : ForcePlateReliableRealtime
+      ? 'Reliable packet realtime stream'
+      : ForcePlatePersistentRealtime
+        ? 'Persistent binary realtime stream'
+        : `Batch realtime sync ${streamIntervalMs()} ms`);
   if (snapshot.discipline === 'eyes_closed_balance') {
     loadBalanceThresholds().catch(() => {});
   }
@@ -7601,13 +7720,22 @@ async function startRealtimeStream() {
     if (needsBodyMass) await setOledScaleUi('step', { force: true });
     await startRealtimeBoard(controls.endpoint.value, true, requestedFilter);
     state.realtime.stopUrls.push(localBatchStopUrl(controls.slaveEndpoint.value));
-    const receiveRealtime = ForcePlatePersistentRealtime
-      ? consumeRealtimePersistentBinaryStream
-      : pollRealtimeBatchLoop;
-    Promise.all([
-      receiveRealtime(controls.endpoint.value, masterAbort, 'Master / Left'),
-      receiveRealtime(controls.slaveEndpoint.value, slaveAbort, 'Right / Slave'),
-    ]).catch((error) => {
+    const receivePromise = ForcePlateReliableRealtime
+      ? consumeNativeReliableRealtimeWithFallback(
+          controls.endpoint.value,
+          controls.slaveEndpoint.value,
+          masterAbort,
+          slaveAbort,
+        )
+      : Promise.all([
+          (ForcePlatePersistentRealtime
+            ? consumeRealtimePersistentBinaryStream
+            : pollRealtimeBatchLoop)(controls.endpoint.value, masterAbort, 'Master / Left'),
+          (ForcePlatePersistentRealtime
+            ? consumeRealtimePersistentBinaryStream
+            : pollRealtimeBatchLoop)(controls.slaveEndpoint.value, slaveAbort, 'Right / Slave'),
+        ]);
+    receivePromise.catch((error) => {
       if (error.name !== 'AbortError') setStatus(`Realtime error: ${error.message}`);
     }).finally(async () => {
       if (state.realtime.runToken !== runToken) return;
