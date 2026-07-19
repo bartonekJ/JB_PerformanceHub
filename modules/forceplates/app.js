@@ -3319,12 +3319,15 @@ function drawSampleRateLabel(
 ) {
   const rateHz = overrideRateHz || sampledRateHz(rows, timeKey);
   if (!rateHz) return;
+  const fontSize = ForcePlateNativeAndroid ? 12 : 50;
+  const rightInset = ForcePlateNativeAndroid ? 8 : 32;
+  const bottomInset = ForcePlateNativeAndroid ? 8 : 28;
   context.save();
   context.fillStyle = 'rgba(255, 255, 255, 0.25)';
-  context.font = `900 ${50 * ratio}px Trebuchet MS, Arial, sans-serif`;
+  context.font = `900 ${fontSize * ratio}px Trebuchet MS, Arial, sans-serif`;
   context.textAlign = 'right';
   context.textBaseline = 'bottom';
-  context.fillText(`${rateHz} Hz`, (width - 32) * ratio, (height - 28) * ratio);
+  context.fillText(`${rateHz} Hz`, (width - rightInset) * ratio, (height - bottomInset) * ratio);
   context.restore();
 }
 
@@ -4284,24 +4287,30 @@ function buildRealtimeGpuPath(line, samples, key, now, spanPaddingMs = 100) {
   if (endIndex - startIndex < 2) return 0;
   state.realtime.renderPerf.sourcePoints += endIndex - startIndex;
 
-  let column = -1;
-  let columnCount = 0;
+  const bucketScale = state.realtime.pxPerSecond * ratio / 1000;
+  const physicalNowX = nowX * ratio;
+  const scrollPixel = Math.round(now * bucketScale);
+  let bucket = null;
+  let bucketCount = 0;
   let minY = 0;
   let maxY = 0;
+  let minX = 0;
+  let maxX = 0;
+  let lastX = 0;
   let lastY = 0;
   let minOrder = 0;
   let maxOrder = 0;
 
-  const flushColumn = () => {
-    if (column < 0 || !columnCount) return;
-    if (columnCount === 1 || Math.abs(maxY - minY) < 0.001) {
-      realtimeGpuStorePoint(line, column, lastY);
+  const flushBucket = () => {
+    if (bucket === null || !bucketCount) return;
+    if (bucketCount === 1 || Math.abs(maxY - minY) < 0.001) {
+      realtimeGpuStorePoint(line, lastX, lastY);
     } else if (minOrder <= maxOrder) {
-      realtimeGpuStorePoint(line, column, minY);
-      realtimeGpuStorePoint(line, column, maxY);
+      realtimeGpuStorePoint(line, minX, minY);
+      realtimeGpuStorePoint(line, maxX, maxY);
     } else {
-      realtimeGpuStorePoint(line, column, maxY);
-      realtimeGpuStorePoint(line, column, minY);
+      realtimeGpuStorePoint(line, maxX, maxY);
+      realtimeGpuStorePoint(line, minX, minY);
     }
     state.realtime.renderPerf.renderedColumns++;
   };
@@ -4310,34 +4319,43 @@ function buildRealtimeGpuPath(line, samples, key, now, spanPaddingMs = 100) {
     const sample = samples[index];
     const value = key ? sample[key] : sample.value;
     if (!finite(value)) continue;
-    const x = nowX - ((now - sample.tMs) / 1000) * state.realtime.pxPerSecond;
-    if (x < -1 || x > width + 1) continue;
-    const nextColumn = Math.round(x * ratio);
+    // Anchor downsampling to sample time rather than the moving screen grid.
+    // Move the complete historical path by whole physical pixels so its
+    // antialiasing coverage remains stable instead of shimmering every frame.
+    const nextBucket = Math.floor(sample.tMs * bucketScale);
+    const pixelX = physicalNowX + sample.tMs * bucketScale - scrollPixel;
+    if (pixelX < -ratio || pixelX > (width + 1) * ratio) continue;
     const y = (zeroY - value * yScale) * ratio;
     if (!finite(y)) continue;
-    if (nextColumn !== column) {
-      flushColumn();
-      column = nextColumn;
-      columnCount = 1;
+    if (nextBucket !== bucket) {
+      flushBucket();
+      bucket = nextBucket;
+      bucketCount = 1;
       minY = y;
       maxY = y;
+      minX = pixelX;
+      maxX = pixelX;
+      lastX = pixelX;
       lastY = y;
       minOrder = 0;
       maxOrder = 0;
       continue;
     }
-    const order = columnCount++;
+    const order = bucketCount++;
     if (y < minY) {
       minY = y;
+      minX = pixelX;
       minOrder = order;
     }
     if (y > maxY) {
       maxY = y;
+      maxX = pixelX;
       maxOrder = order;
     }
+    lastX = pixelX;
     lastY = y;
   }
-  flushColumn();
+  flushBucket();
   return line.pointCount;
 }
 
@@ -4415,7 +4433,28 @@ function clearRealtimeGpu(style) {
   const background = realtimeGpuColor(style.chartBg, 1);
   gl.viewport(0, 0, realtimeGpuChart.width, realtimeGpuChart.height);
   gl.clearColor(background[0], background[1], background[2], 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  if (ForcePlateNativeAndroid) {
+    // Some Android WebView GPU drivers only invalidate the first 256x256 tile
+    // for a full-surface clear. Explicit tile scissoring marks every part of
+    // the framebuffer dirty before the realtime curves are drawn.
+    const tileSize = 256;
+    gl.enable(gl.SCISSOR_TEST);
+    for (let y = 0; y < realtimeGpuChart.height; y += tileSize) {
+      for (let x = 0; x < realtimeGpuChart.width; x += tileSize) {
+        gl.scissor(
+          x,
+          y,
+          Math.min(tileSize, realtimeGpuChart.width - x),
+          Math.min(tileSize, realtimeGpuChart.height - y),
+        );
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
+    }
+    gl.disable(gl.SCISSOR_TEST);
+    gl.scissor(0, 0, realtimeGpuChart.width, realtimeGpuChart.height);
+  } else {
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
   return true;
 }
 
@@ -4800,6 +4839,7 @@ function realtimeSegmentHitAt(clientX, clientY) {
 }
 
 function realtimeHudHitAt(clientX, clientY) {
+  if (ForcePlateNativeAndroid) return null;
   const rect = realtimeChart.getBoundingClientRect();
   const x = clientX - rect.left;
   const y = clientY - rect.top;
@@ -5078,6 +5118,7 @@ function realtimeTransportShort(transport) {
 }
 
 function drawRealtimeDebugHud(width, ratio) {
+  if (ForcePlateNativeAndroid) return;
   const nowMs = performance.now();
   const hud = state.realtime.debugHud;
   const checkboxX = 58;
@@ -5291,7 +5332,7 @@ function drawScaleRealtime(width, height, ratio) {
     ratio,
     state.realtime.samples.length ? state.realtime.samples : state.realtime.leftSamples,
     'tMs',
-    realtimeRenderRateHz(),
+    realtimeRenderRateHz() || Math.round(1000 / realtimeSampleIntervalMs()),
   );
   updateRealtimeScrubControl();
 }
@@ -5804,7 +5845,7 @@ function drawRealtime() {
     ratio,
     state.realtime.samples.length ? state.realtime.samples : state.realtime.leftSamples,
     'tMs',
-    realtimeRenderRateHz(),
+    realtimeRenderRateHz() || Math.round(1000 / realtimeSampleIntervalMs()),
   );
     updateRealtimeScrubControl();
   } finally {
