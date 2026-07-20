@@ -73,7 +73,7 @@
     const available = nodes.filter(Boolean);
     if (!pane || !available.length) return;
     const details = document.createElement('details');
-    details.className = 'mobileAdvanced';
+    details.className = 'mobileAdvanced collapsibleSection';
     const summary = document.createElement('summary');
     summary.textContent = label;
     details.appendChild(summary);
@@ -82,23 +82,11 @@
   }
 
   const sessionPane = document.getElementById('sessionPane');
-  wrapAdvanced(sessionPane, [
+  const sessionMeasuringBody = document.getElementById('sessionMeasuringBody');
+  wrapAdvanced(sessionMeasuringBody || sessionPane, [
     document.getElementById('measureTraceSetting'),
     document.getElementById('measureWeighingSetting'),
   ], 'Advanced measurement');
-
-  const realtimePane = document.getElementById('realtimePane');
-  const realtimeHeading = realtimePane?.querySelector('h3');
-  wrapAdvanced(realtimePane, [
-    realtimeHeading,
-    realtimePane?.querySelector('.realtimeControls'),
-    document.getElementById('slaveEndpoint')?.closest('label'),
-    document.getElementById('realtimeIntervalMs')?.closest('label'),
-    document.getElementById('realtimeSampleRate')?.closest('label'),
-    document.getElementById('realtimeRenderBuffer')?.closest('label'),
-    document.getElementById('realtimeRenderLagMs')?.closest('label'),
-    document.getElementById('realtimeWarmupMs')?.closest('label'),
-  ], 'Advanced stream');
 
   const analyzeView = document.getElementById('analyzeView');
   if (analyzeView) {

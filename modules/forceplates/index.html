@@ -29,6 +29,7 @@
     <button id="appTabMeasure" class="active" type="button">Measure</button>
     <button id="appTabAnalyze" type="button">Analyze</button>
     <button id="appTabResults" type="button">Results</button>
+    <button id="appTabProtocols" type="button">Protocols</button>
     <button id="appTabSettings" type="button">Settings</button>
     <div class="appTabsFill"></div>
       <div class="appCacheRow">
@@ -123,6 +124,12 @@
         </div>
         <div class="sessionCompact">
           <div id="sessionPane" class="sidePane active">
+            <details id="sessionMeasuring" class="sessionMeasuringDetails mobileAdvanced collapsibleSection" open>
+              <summary>
+                <span class="collapsibleSectionTitle">Session</span>
+                <output id="sessionMeasuringInfo" class="collapsibleSectionInfo">Session · Athlete · Discipline</output>
+              </summary>
+              <div id="sessionMeasuringBody" class="collapsibleSectionBody">
             <div class="sessionTitleRow">
               <label class="fieldGrow">
                 Session
@@ -145,8 +152,8 @@
                 <select id="sessionCategory"></select>
               </label>
             </div>
-            <div class="athleteMassRow">
-              <span id="sessionAthleteMass">Body mass unknown</span>
+            <div class="athleteMassRow hidden">
+              <span id="sessionAthleteMass" class="hidden">Body mass unknown</span>
               <button id="sessionUpdateAthleteMass" class="hidden" type="button">Update Athlete Profile</button>
             </div>
             <div class="sessionRow">
@@ -211,58 +218,17 @@
               <button id="measurementStart" type="button">START</button>
               <button id="measurementStop" type="button">STOP</button>
             </div>
+              </div>
+            </details>
           </div>
 
           <div id="realtimePane" class="sidePane">
-            <h3>Settings</h3>
-            <div class="realtimeControls">
-              <label>
-                Speed
-                <input id="realtimeSpeed" type="range" min="60" max="420" step="20" value="160">
-              </label>
-              <label class="checkboxControl">
-                <input id="realtimeAutoY" type="checkbox" checked>
-                Auto vertical
-              </label>
-            </div>
-            <label>
-              Slave stream
-              <input id="slaveEndpoint" type="text" value="http://192.168.4.254/local_realtime.csv">
-            </label>
-            <label>
-              Poll
-              <span>
-                <input id="realtimeIntervalMs" type="number" min="1" max="1000" step="1" value="1">
-                ms
-              </span>
-            </label>
-            <label>
-              Realtime rate
-              <select id="realtimeSampleRate">
-                <option value="4" selected>250 Hz</option>
-                <option value="2">500 Hz</option>
-              </select>
-            </label>
-            <label class="checkboxControl">
-              <input id="realtimeRenderBuffer" type="checkbox" checked>
-              Render buffer
-            </label>
-            <label>
-              Lag
-              <span>
-                <input id="realtimeRenderLagMs" type="number" min="0" max="1000" step="5" value="20">
-                ms
-              </span>
-            </label>
-            <label>
-              Wait
-              <span>
-                <input id="realtimeWarmupMs" type="number" min="0" max="30000" step="500" value="6000">
-                ms
-              </span>
-            </label>
-            <div class="sessionDivider"></div>
-            <h3>Measuring</h3>
+            <details id="realtimeMeasuring" class="realtimeMeasuringDetails mobileAdvanced collapsibleSection" open>
+              <summary>
+                <span class="collapsibleSectionTitle">Measuring</span>
+                <output id="realtimeMeasuringInfo" class="collapsibleSectionInfo">Athlete · Discipline</output>
+              </summary>
+              <div class="collapsibleSectionBody">
             <div class="sessionRow">
               <label>
                 Athlete
@@ -273,8 +239,8 @@
                 <select id="realtimeCategory"></select>
               </label>
             </div>
-            <div class="athleteMassRow">
-              <span id="realtimeAthleteMass">Body mass unknown</span>
+            <div class="athleteMassRow hidden">
+              <span id="realtimeAthleteMass" class="hidden">Body mass unknown</span>
               <button id="realtimeUpdateAthleteMass" class="hidden" type="button">Update Athlete Profile</button>
             </div>
             <label>
@@ -324,6 +290,60 @@
               No detected jumps
             </div>
             <button id="realtimeExportSelected" type="button">Export selected</button>
+              </div>
+            </details>
+            <details id="realtimeSettings" class="realtimeSettingsDetails mobileAdvanced collapsibleSection">
+              <summary>
+                <span class="collapsibleSectionTitle">Realtime Settings</span>
+                <output id="realtimeSettingsRate" class="collapsibleSectionInfo">250 Hz</output>
+              </summary>
+              <div class="realtimeControls">
+                <label>
+                  Speed
+                  <input id="realtimeSpeed" type="range" min="60" max="420" step="20" value="160">
+                </label>
+                <label class="checkboxControl">
+                  <input id="realtimeAutoY" type="checkbox" checked>
+                  Auto vertical
+                </label>
+              </div>
+              <label>
+                Slave stream
+                <input id="slaveEndpoint" type="text" value="http://192.168.4.254/local_realtime.csv">
+              </label>
+              <label>
+                Poll
+                <span>
+                  <input id="realtimeIntervalMs" type="number" min="1" max="1000" step="1" value="1">
+                  ms
+                </span>
+              </label>
+              <label>
+                Realtime rate
+                <select id="realtimeSampleRate">
+                  <option value="4" selected>250 Hz</option>
+                  <option value="2">500 Hz</option>
+                </select>
+              </label>
+              <label class="checkboxControl">
+                <input id="realtimeRenderBuffer" type="checkbox" checked>
+                Render buffer
+              </label>
+              <label>
+                Lag
+                <span>
+                  <input id="realtimeRenderLagMs" type="number" min="0" max="1000" step="5" value="20">
+                  ms
+                </span>
+              </label>
+              <label>
+                Wait
+                <span>
+                  <input id="realtimeWarmupMs" type="number" min="0" max="30000" step="500" value="6000">
+                  ms
+                </span>
+              </label>
+            </details>
           </div>
         </div>
       </aside>
@@ -547,6 +567,27 @@
         </div>
         <div id="resultsSummary" class="resultsSummary"></div>
         <div id="resultsList" class="resultsList"></div>
+      </section>
+    </section>
+
+    <section id="protocolsView" class="appView protocolsView">
+      <aside class="protocolDisciplinePane">
+        <header>
+          <small>Test protocols</small>
+          <h2>Disciplines</h2>
+        </header>
+        <nav id="protocolDisciplineList" class="protocolDisciplineList" aria-label="Test disciplines"></nav>
+      </aside>
+      <section class="protocolContentPane">
+        <header class="protocolHeader">
+          <div>
+            <small>Test protocol</small>
+            <h2 id="protocolTitle">Squat Jump</h2>
+            <p id="protocolIntro"></p>
+          </div>
+          <span id="protocolStepCount" class="protocolStepCount"></span>
+        </header>
+        <div id="protocolSteps" class="protocolSteps"></div>
       </section>
     </section>
 

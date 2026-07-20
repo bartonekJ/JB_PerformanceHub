@@ -23,11 +23,47 @@ body {
   color: var(--text);
   display: flex;
   flex-direction: column;
-  font-family: "Trebuchet MS", Arial, sans-serif;
+  font-family: var(--jb-font-ui);
   overflow: hidden;
 }
 
 .fpTopbar { flex: 0 0 auto; }
+
+.fpTopbar .ph-title small {
+  font-family: var(--jb-font-display);
+  font-size-adjust: var(--jb-font-display-adjust);
+  letter-spacing: .08em;
+}
+
+.fpTopbar .ph-title strong {
+  font-family: var(--jb-font-emphasis);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: .025em;
+}
+
+.ph-home,
+h1,
+h2,
+h3,
+label,
+.panelHeader,
+.settingsGroupTitle,
+.deviceStatePanel span,
+.metric .label,
+.connectedDevices {
+  font-family: var(--jb-font-display);
+  font-size-adjust: var(--jb-font-display-adjust);
+  letter-spacing: .045em;
+}
+
+.metric .value,
+.traceItem,
+.leaderboardItem,
+.resultCard {
+  font-family: var(--jb-font-ui);
+  letter-spacing: 0;
+}
 
 .connectedDevices {
   min-width: 220px;
@@ -139,6 +175,9 @@ button,
   padding: 8px 12px;
   font: inherit;
   font-weight: 700;
+  font-family: var(--jb-font-display);
+  font-size-adjust: var(--jb-font-display-adjust);
+  letter-spacing: .035em;
   cursor: pointer;
 }
 
@@ -161,15 +200,16 @@ select {
   height: 34px;
   border: 1px solid var(--line-soft);
   border-radius: 4px;
-  background: #151515;
+  background: var(--panel-3);
   color: var(--text);
   padding: 0 10px;
   font: inherit;
+  font-family: var(--jb-font-ui);
 }
 
 select {
   appearance: none;
-  background-color: #151515;
+  background-color: var(--panel-3);
   background-image:
     linear-gradient(45deg, transparent 50%, var(--accent) 50%),
     linear-gradient(135deg, var(--accent) 50%, transparent 50%);
@@ -183,7 +223,7 @@ select {
 
 select option,
 select option:checked {
-  background: #151515;
+  background: var(--panel-3);
   color: var(--text);
 }
 
@@ -217,10 +257,12 @@ select:focus {
   background:
     linear-gradient(45deg, transparent 50%, var(--accent) 50%) calc(100% - 17px) 50% / 6px 6px no-repeat,
     linear-gradient(135deg, var(--accent) 50%, transparent 50%) calc(100% - 11px) 50% / 6px 6px no-repeat,
-    #151515;
+    var(--panel-3);
   color: var(--text);
   font: inherit;
   font-weight: 400;
+  font-family: var(--jb-font-ui);
+  letter-spacing: 0;
 }
 
 .customSelectButton:hover,
@@ -245,7 +287,8 @@ select:focus {
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: #151515;
+  background: var(--panel-3);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.38);
 }
 
 .customSelect.open .customSelectList {
@@ -259,10 +302,12 @@ select:focus {
   padding: 6px 8px;
   border: 1px solid transparent;
   border-radius: 3px;
-  background: #151515;
+  background: var(--panel-3);
   color: var(--text);
   text-align: left;
   font-weight: 400;
+  font-family: var(--jb-font-ui);
+  letter-spacing: 0;
 }
 
 .customSelectOption:hover {
@@ -735,6 +780,102 @@ body.resizingMeasureVertical * {
   accent-color: var(--accent);
 }
 
+.collapsibleSection {
+  margin: 10px 0 8px;
+  border: 0;
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.12);
+  overflow: visible;
+}
+
+.collapsibleSection summary {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--jb-font-display);
+  font-size-adjust: var(--jb-font-display-adjust);
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.collapsibleSection summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsibleSection summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid var(--accent);
+  transform-origin: 45% 50%;
+  transition: transform 120ms ease;
+}
+
+.collapsibleSection[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsibleSection summary:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.collapsibleSection summary .collapsibleSectionTitle {
+  display: block;
+  color: inherit;
+}
+
+.collapsibleSectionInfo {
+  min-width: 0;
+  max-width: 68%;
+  margin-left: auto;
+  overflow: hidden;
+  color: rgba(255, 246, 228, 0.54);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--jb-font-ui);
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.collapsibleSection[open] {
+  padding: 0 8px 8px;
+}
+
+.collapsibleSection[open] summary {
+  margin: 0 -8px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.collapsibleSectionBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.realtimeSettingsDetails > label,
+.realtimeSettingsDetails > .realtimeControls {
+  margin-bottom: 8px;
+}
+
+.realtimeSettingsDetails > .realtimeControls {
+  padding-bottom: 8px;
+  background: transparent;
+}
+
 .realtimeCanvasStack {
   flex: 1 1 auto;
   position: relative;
@@ -800,15 +941,19 @@ body.resizingMeasureVertical * {
 
 .deviceStatePanel span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .deviceStatePanel strong {
   color: var(--text);
-  font-size: 22px;
+  font-family: var(--jb-font-emphasis);
+  font-size: 25px;
+  font-weight: 400;
+  letter-spacing: .04em;
   line-height: 1;
+  text-transform: uppercase;
 }
 
 .deviceStatePanel small {
@@ -857,6 +1002,11 @@ body.resizingMeasureVertical * {
 .sidePane.active {
   display: flex;
   flex-direction: column;
+}
+
+html:not(.fpMobileApp) #realtimePane.sidePane.active {
+  flex: 1 0 auto;
+  min-height: 100%;
 }
 
 .sidePane > * {
@@ -967,7 +1117,7 @@ body.resizingMeasureVertical * {
   gap: 4px;
   min-width: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .athleteMassRow {
@@ -1129,6 +1279,234 @@ body.resizingMeasureVertical * {
 .placeholderPanel {
   flex: 1 1 auto;
   padding: 12px;
+}
+
+.protocolsView {
+  min-width: 0;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.protocolsView.active {
+  display: grid;
+}
+
+.protocolDisciplinePane,
+.protocolContentPane {
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.protocolDisciplinePane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.protocolDisciplinePane > header,
+.protocolHeader {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.protocolDisciplinePane small,
+.protocolHeader small,
+.protocolStepDescription small {
+  color: var(--accent);
+  font-family: var(--jb-font-display);
+  font-size: 12px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.protocolDisciplinePane h2,
+.protocolHeader h2,
+.protocolStepDescription h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.protocolDisciplinePane h2 {
+  margin-top: 3px;
+  font-size: 22px;
+}
+
+.protocolDisciplineList {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.protocolDisciplineList button {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.protocolDisciplineList button strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.protocolDisciplineList button span {
+  color: var(--muted);
+  font-family: var(--jb-font-ui);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.protocolDisciplineList button:hover {
+  background: var(--panel-2);
+}
+
+.protocolDisciplineList button.active {
+  background: rgba(255, 147, 9, .12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.protocolContentPane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.protocolHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.protocolHeader h2 {
+  margin-top: 2px;
+  font-size: 30px;
+}
+
+.protocolHeader p {
+  max-width: 860px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.protocolStepCount {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  color: var(--muted);
+  font-family: var(--jb-font-display);
+  font-size: 13px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.protocolSteps {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.protocolStep {
+  min-height: 178px;
+  display: grid;
+  grid-template-columns: 64px minmax(220px, 320px) minmax(260px, 1fr);
+  align-items: stretch;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.protocolStepNumber {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 147, 9, .1);
+  border-right: 1px solid var(--line-soft);
+  color: var(--accent);
+  font-family: var(--jb-font-emphasis);
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: .025em;
+}
+
+.protocolStepImage {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px 14px;
+  background: #20211f;
+  border-right: 1px solid var(--line-soft);
+}
+
+.protocolIllustration {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+
+.protocolIllustration path,
+.protocolIllustration circle,
+.protocolIllustration rect {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.protocolSvgFigure {
+  stroke: rgba(255, 246, 228, .9);
+}
+
+.protocolSvgMuted {
+  stroke: rgba(255, 246, 228, .25);
+}
+
+.protocolSvgAccent {
+  stroke: var(--accent);
+}
+
+.protocolStepDescription {
+  align-self: center;
+  padding: 22px 26px;
+}
+
+.protocolStepDescription h3 {
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.protocolStepDescription p {
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.55;
 }
 
 .resultsView {
@@ -1586,7 +1964,7 @@ body.resizingMeasureVertical * {
   gap: 5px;
   margin-bottom: 12px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .settingsPanel span {
@@ -1622,12 +2000,14 @@ body.resizingMeasureVertical * {
 
 .traceItem {
   width: 100%;
-  background: #171717;
+  background: var(--panel-3);
   color: var(--text);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
   padding: 8px;
   text-align: left;
+  font-family: var(--jb-font-ui);
+  letter-spacing: 0;
 }
 
 .traceItem.active {
@@ -1642,6 +2022,53 @@ body.resizingMeasureVertical * {
 
 .traceItemMobileLine {
   display: none;
+}
+
+.settingsPanel .traceItemMobileLine {
+  display: none;
+}
+
+.traceItemDesktopLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.traceItemDesktopLine > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traceItemDesktopPrimary {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.traceItemDesktopPrimary > strong:last-child {
+  color: rgba(255, 246, 228, 0.78);
+  font-size: 12px;
+}
+
+.traceItemDesktopMetric {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.settingsPanel .traceItemDesktopMetric > span {
+  display: block;
+  color: var(--muted);
+}
+
+.traceItemDesktopMetric strong {
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .traceItemName {
@@ -1961,7 +2388,7 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
 
 .metric .label {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -2310,7 +2737,7 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
   background: var(--panel-3);
   border: 1px solid var(--line-soft);
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -2362,7 +2789,7 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
 
 .deviceCalibrationSteps em {
   margin-top: 5px;
-  padding: 8px;
+  padding: 7px 8px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.035);
   border-left: 2px solid var(--accent);

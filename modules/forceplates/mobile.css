@@ -145,7 +145,8 @@ html.fpMobileApp .appTabs > button.active {
 html.fpMobileApp #appTabMeasure { order: 1; }
 html.fpMobileApp #appTabAnalyze { order: 2; }
 html.fpMobileApp #appTabSettings { order: 3; }
-html.fpMobileApp #appTabResults { order: 4; }
+html.fpMobileApp #appTabProtocols { order: 4; }
+html.fpMobileApp #appTabResults { order: 5; }
 
 html.fpMobileApp body.fpMobileApp > main {
   min-width: 0;
@@ -446,9 +447,10 @@ html.fpMobileApp .sessionLeaderboard {
 html.fpMobileApp .mobileAdvanced {
   margin: 10px 0;
   padding: 0;
-  border: 1px solid var(--jb-color-line-soft, #3f3b35);
-  border-radius: 7px;
-  background: var(--jb-color-bg-panel-3, #202020);
+  border: 0;
+  border-left: 3px solid var(--jb-module-primary, #ff9309);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.12);
 }
 
 html.fpMobileApp .mobileAdvanced summary {
@@ -817,6 +819,124 @@ html.fpMobileApp .mobileResultsPlaceholder p {
   font-size: 14px;
 }
 
+/* Protocols */
+html.fpMobileApp .protocolsView.active {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: hidden;
+}
+
+html.fpMobileApp .protocolDisciplinePane {
+  flex: 0 0 auto;
+  display: block;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+html.fpMobileApp .protocolDisciplinePane > header {
+  display: none;
+}
+
+html.fpMobileApp .protocolDisciplineList {
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+html.fpMobileApp .protocolDisciplineList::-webkit-scrollbar {
+  display: none;
+}
+
+html.fpMobileApp .protocolDisciplineList button {
+  min-width: max-content;
+  min-height: 40px;
+  display: block;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+html.fpMobileApp .protocolDisciplineList button span {
+  display: none;
+}
+
+html.fpMobileApp .protocolContentPane {
+  min-height: 0;
+  flex: 1 1 auto;
+  border-radius: 8px;
+}
+
+html.fpMobileApp .protocolHeader {
+  align-items: start;
+  padding: 12px 14px;
+}
+
+html.fpMobileApp .protocolHeader h2 {
+  font-size: 24px;
+}
+
+html.fpMobileApp .protocolHeader p {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+html.fpMobileApp .protocolStepCount {
+  padding: 4px 7px;
+  font-size: 11px;
+}
+
+html.fpMobileApp .protocolSteps {
+  gap: 7px;
+  padding: 7px;
+}
+
+html.fpMobileApp .protocolStep {
+  min-height: 0;
+  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+}
+
+html.fpMobileApp .protocolStepNumber {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  font-size: 23px;
+}
+
+html.fpMobileApp .protocolStepImage {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 126px;
+  padding: 4px 10px;
+  border-right: 0;
+  border-bottom: 1px solid var(--jb-color-line-soft, #3f3b35);
+}
+
+html.fpMobileApp .protocolIllustration {
+  height: 126px;
+}
+
+html.fpMobileApp .protocolStepDescription {
+  grid-column: 2;
+  grid-row: 2;
+  padding: 13px 15px 15px;
+}
+
+html.fpMobileApp .protocolStepDescription h3 {
+  font-size: 19px;
+}
+
+html.fpMobileApp .protocolStepDescription p {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 @media (orientation: landscape) {
   html.fpMobileApp body.fpMobileApp {
     --mobile-nav-size: 88px;
@@ -979,6 +1099,63 @@ html.fpMobileApp .mobileResultsPlaceholder p {
 
   html.fpMobileApp .deviceCalibrationInputs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  html.fpMobileApp .protocolsView.active {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  html.fpMobileApp .protocolDisciplinePane {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  html.fpMobileApp .protocolDisciplineList {
+    min-height: 0;
+    display: grid;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  html.fpMobileApp .protocolDisciplineList button {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+
+  html.fpMobileApp .protocolHeader {
+    padding: 9px 12px;
+  }
+
+  html.fpMobileApp .protocolHeader p {
+    display: none;
+  }
+
+  html.fpMobileApp .protocolStep {
+    grid-template-columns: 38px minmax(150px, 220px) minmax(220px, 1fr);
+    grid-template-rows: minmax(126px, auto);
+  }
+
+  html.fpMobileApp .protocolStepNumber {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  html.fpMobileApp .protocolStepImage {
+    grid-column: 2;
+    grid-row: 1;
+    border-right: 1px solid var(--jb-color-line-soft, #3f3b35);
+    border-bottom: 0;
+  }
+
+  html.fpMobileApp .protocolStepDescription {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
   }
 }
 

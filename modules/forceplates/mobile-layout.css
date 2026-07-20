@@ -683,7 +683,8 @@ html.fpMobileApp body.fpMobileLayoutV2 .traceItem {
 
 html.fpMobileApp body.fpMobileLayoutV2 .traceItem > .traceItemName,
 html.fpMobileApp body.fpMobileLayoutV2 .traceItem > .traceItemAttempt,
-html.fpMobileApp body.fpMobileLayoutV2 .traceItem > .traceItemMeta {
+html.fpMobileApp body.fpMobileLayoutV2 .traceItem > .traceItemMeta,
+html.fpMobileApp body.fpMobileLayoutV2 .traceItem > .traceItemDesktopLine {
   display: none;
 }
 

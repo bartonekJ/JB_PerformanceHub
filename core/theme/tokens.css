@@ -17,11 +17,14 @@
   --jb-module-secondary: #8fdb00;
   --jb-module-primary-soft: rgba(255, 147, 9, 0.18);
 
-  --jb-font-ui: "Trebuchet MS", Arial, sans-serif;
-  --jb-font-display: Arial, Helvetica, sans-serif;
-  --jb-font-size-tab-01: 14px;
-  --jb-font-size-button-01: 14px;
-  --jb-font-size-label-01: 12px;
+  --jb-font-ui: Verdana, Geneva, Arial, sans-serif;
+  --jb-font-display: "EngraversGothic BT", "Engravers' Gothic BT", "Arial Narrow", "Roboto Condensed", "sans-serif-condensed", sans-serif;
+  --jb-font-emphasis: Impact, Haettenschweiler, "Arial Narrow Bold", "sans-serif-condensed", sans-serif;
+  --jb-font-display-adjust: 0.56;
+  --jb-font-display-spacing: 0.045em;
+  --jb-font-size-tab-01: 15px;
+  --jb-font-size-button-01: 15px;
+  --jb-font-size-label-01: 13px;
 
   --jb-radius-control: 4px;
   --jb-radius-card: 8px;

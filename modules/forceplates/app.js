@@ -12,6 +12,73 @@ const RealtimeStartRequestTimeoutMs = 2000;
 const RealtimePersistentInitialAttempts = 4;
 const RealtimeRenderTargetFps = 60;
 const RealtimeRenderIntervalMs = 1000 / RealtimeRenderTargetFps;
+const ForcePlateTestProtocols = [
+  {
+    id: 'squat_jump',
+    label: 'Squat Jump',
+    intro: 'A vertical jump from a stable squat position without a countermovement.',
+    steps: [
+      { visual: 'step', title: 'Step onto the plates', description: 'Stand with one foot centered on each plate. Keep your hands on your hips and wait for weighing to finish.' },
+      { visual: 'squat', title: 'Set the squat position', description: 'Lower into the prescribed squat depth and hold the position. Keep the trunk controlled and both feet fully supported.' },
+      { visual: 'jump', title: 'Jump on GO', description: 'Jump vertically as high and as fast as possible without dipping lower before take-off. Keep your hands on your hips.' },
+      { visual: 'land', title: 'Land and stand still', description: 'Land with one foot on each plate, absorb the impact naturally and remain still until the test is complete.' },
+    ],
+  },
+  {
+    id: 'countermovement_jump',
+    label: 'Countermovement Jump',
+    intro: 'A maximal vertical jump using one continuous downward and upward movement.',
+    steps: [
+      { visual: 'step', title: 'Step onto the plates', description: 'Stand upright with one foot centered on each plate. Keep your hands on your hips while body mass is measured.' },
+      { visual: 'still', title: 'Hold the start position', description: 'Stand tall, look forward and remain still. Do not begin the movement before the GO instruction.' },
+      { visual: 'jump', title: 'Countermove and jump', description: 'On GO, perform one natural countermovement and immediately jump vertically with maximal intent.' },
+      { visual: 'land', title: 'Land and stabilize', description: 'Return to both plates, control the landing and remain still until the routine confirms completion.' },
+    ],
+  },
+  {
+    id: 'drop_jump',
+    label: 'Drop Jump',
+    intro: 'A reactive jump performed immediately after stepping from a box of known height.',
+    steps: [
+      { visual: 'box', title: 'Prepare on the box', description: 'Set the correct box height. Stand at the front edge with hands on hips and the plates clear in front of you.' },
+      { visual: 'drop', title: 'Step off the box', description: 'Step forward and allow gravity to bring you down. Do not jump upward or deliberately push away from the box.' },
+      { visual: 'rebound', title: 'Land and rebound', description: 'Land with one foot on each plate and jump again immediately. Aim for a short contact time and maximal jump height.' },
+      { visual: 'land', title: 'Final landing', description: 'Land back on the plates after the rebound, regain balance and stand still until the test is complete.' },
+    ],
+  },
+  {
+    id: 'eyes_closed_balance',
+    label: 'Static Balance',
+    intro: 'A quiet-standing balance assessment using the selected stance and vision condition.',
+    steps: [
+      { visual: 'setup', title: 'Confirm the test condition', description: 'Check the stance, tested leg, eyes-open or eyes-closed condition and test duration before starting.' },
+      { visual: 'balance', title: 'Take the test position', description: 'Place the supporting foot in the prescribed position. Settle your posture without touching external support.' },
+      { visual: 'eyes', title: 'Follow the vision instruction', description: 'Keep the eyes open on the reference point or close them when instructed. Maintain the same head position.' },
+      { visual: 'still', title: 'Remain as still as possible', description: 'Hold the position for the full measurement. Continue until the completion instruction is shown.' },
+    ],
+  },
+  {
+    id: 'max_force',
+    label: 'Max Force',
+    intro: 'A maximal isometric effort performed in a repeatable, discipline-specific body position.',
+    steps: [
+      { visual: 'setup', title: 'Prepare the test setup', description: 'Select the required position and check all external supports, straps and joint angles before loading the plates.' },
+      { visual: 'still', title: 'Assume the start position', description: 'Place the feet consistently, brace the body and establish light contact without producing a maximal effort.' },
+      { visual: 'force', title: 'Build maximal force', description: 'On GO, push as hard and as fast as the protocol requires. Maintain the prescribed position throughout the effort.' },
+      { visual: 'release', title: 'Release safely', description: 'Reduce force smoothly after the stop instruction and leave the setup only when it is safe to do so.' },
+    ],
+  },
+  {
+    id: 'scale',
+    label: 'Scale',
+    intro: 'A stable body-mass measurement used by force- and bodyweight-normalized metrics.',
+    steps: [
+      { visual: 'tare', title: 'Clear and tare the plates', description: 'Make sure both plates are unloaded and stable. Tare the system before the athlete steps on.' },
+      { visual: 'step', title: 'Step onto the plates', description: 'Place one foot on each plate and distribute body weight naturally without touching external support.' },
+      { visual: 'still', title: 'Stand still', description: 'Maintain a relaxed upright posture while the reading stabilizes. Wait for the measurement to be accepted.' },
+    ],
+  },
+];
 const NativeResultsRequests = new Map();
 let NativeResultsRequestId = 0;
 let PendingNativeResultsAction = '';
@@ -93,6 +160,7 @@ const state = {
     },
   },
   appTab: 'measure',
+  protocolDiscipline: 'squat_jump',
   measurePanelTab: 'session',
   measurementPoll: {
     timer: 0,
@@ -382,10 +450,17 @@ const DefaultSettingsPreset = {
   appTabMeasure: document.getElementById('appTabMeasure'),
   appTabAnalyze: document.getElementById('appTabAnalyze'),
   appTabResults: document.getElementById('appTabResults'),
+  appTabProtocols: document.getElementById('appTabProtocols'),
   appTabSettings: document.getElementById('appTabSettings'),
   measureView: document.getElementById('measureView'),
   analyzeView: document.getElementById('analyzeView'),
   resultsView: document.getElementById('resultsView'),
+  protocolsView: document.getElementById('protocolsView'),
+  protocolDisciplineList: document.getElementById('protocolDisciplineList'),
+  protocolTitle: document.getElementById('protocolTitle'),
+  protocolIntro: document.getElementById('protocolIntro'),
+  protocolStepCount: document.getElementById('protocolStepCount'),
+  protocolSteps: document.getElementById('protocolSteps'),
   deviceSettingsView: document.getElementById('deviceSettingsView'),
   deviceBoardSelect: document.getElementById('deviceBoardSelect'),
   deviceConnectionBadge: document.getElementById('deviceConnectionBadge'),
@@ -476,6 +551,7 @@ const DefaultSettingsPreset = {
   sessionCategory: document.getElementById('sessionCategory'),
   sessionName: document.getElementById('sessionName'),
   sessionState: document.getElementById('sessionState'),
+  sessionMeasuringInfo: document.getElementById('sessionMeasuringInfo'),
   measureDiscipline: document.getElementById('measureDiscipline'),
   measureBoxSetting: document.getElementById('measureBoxSetting'),
   measureTraceSetting: document.getElementById('measureTraceSetting'),
@@ -500,6 +576,8 @@ const DefaultSettingsPreset = {
   balanceDiscard: document.getElementById('balanceDiscard'),
   realtimeIntervalMs: document.getElementById('realtimeIntervalMs'),
   realtimeSampleRate: document.getElementById('realtimeSampleRate'),
+  realtimeSettingsRate: document.getElementById('realtimeSettingsRate'),
+  realtimeMeasuringInfo: document.getElementById('realtimeMeasuringInfo'),
   realtimeWarmupMs: document.getElementById('realtimeWarmupMs'),
   realtimeAthlete: document.getElementById('realtimeAthlete'),
   realtimeAthleteMass: document.getElementById('realtimeAthleteMass'),
@@ -1011,6 +1089,8 @@ function renderSessionControls() {
   renderAthleteMassControls();
   renderBalanceTrialControls();
   syncCustomSelects();
+  syncSessionMeasuringSummary();
+  syncRealtimeMeasuringSummary();
 }
 
 function currentAthleteMassSnapshot() {
@@ -1058,7 +1138,9 @@ function renderAthleteMassControls() {
     if (control) control.textContent = text;
   });
   [controls.sessionUpdateAthleteMass, controls.realtimeUpdateAthleteMass].forEach((control) => {
-    if (control) control.classList.toggle('hidden', !canUpdate);
+    if (!control) return;
+    control.classList.toggle('hidden', !canUpdate);
+    control.closest('.athleteMassRow')?.classList.toggle('hidden', !canUpdate);
   });
 }
 
@@ -1117,7 +1199,34 @@ function renderDisciplineSettings(discipline = controls.measureDiscipline.value)
   controls.realtimeAutoY.closest('label')?.classList.toggle('hidden', isBalance || isScale);
   controls.realtimeSegmentList.classList.toggle('hidden', isBalance || isScale);
   controls.realtimeExportSelected.classList.toggle('hidden', isBalance || isScale);
+  syncRealtimeSettingsSummary();
+  syncSessionMeasuringSummary();
+  syncRealtimeMeasuringSummary();
   renderBalanceTrialControls();
+}
+
+function syncRealtimeSettingsSummary() {
+  if (!controls.realtimeSettingsRate) return;
+  const selected = controls.realtimeSampleRate.selectedOptions?.[0];
+  controls.realtimeSettingsRate.textContent = selected?.textContent?.trim() || 'Realtime';
+}
+
+function syncRealtimeMeasuringSummary() {
+  if (!controls.realtimeMeasuringInfo) return;
+  const athlete = controls.realtimeAthlete.selectedOptions?.[0]?.textContent?.trim() || 'No athlete';
+  const discipline = controls.realtimeDiscipline.selectedOptions?.[0]?.textContent?.trim() || 'No discipline';
+  controls.realtimeMeasuringInfo.textContent = `${athlete} \u00b7 ${discipline}`;
+  controls.realtimeMeasuringInfo.title = `${athlete} · ${discipline}`;
+}
+
+function syncSessionMeasuringSummary() {
+  if (!controls.sessionMeasuringInfo) return;
+  const session = controls.sessionName.value.trim() || 'Unnamed session';
+  const athlete = controls.sessionAthlete.selectedOptions?.[0]?.textContent?.trim() || 'No athlete';
+  const discipline = controls.measureDiscipline.selectedOptions?.[0]?.textContent?.trim() || 'No discipline';
+  const detail = `${session} \u00b7 ${athlete} \u00b7 ${discipline}`;
+  controls.sessionMeasuringInfo.textContent = detail;
+  controls.sessionMeasuringInfo.title = detail;
 }
 
 function sessionDisciplineSettings(discipline = controls.measureDiscipline.value) {
@@ -1144,6 +1253,7 @@ function syncSessionMetaFromControls() {
   state.session.session.category = controls.sessionCategory.value;
   state.session.session.updatedAt = Date.now();
   window.JBForcePlateSessionStore.writeStoredState(state.session);
+  syncSessionMeasuringSummary();
   updateCacheStatus();
 }
 
@@ -2620,6 +2730,63 @@ function escapeHtml(value) {
   }[char]));
 }
 
+function protocolIllustration(visual, title) {
+  const plate = '<path class="protocolSvgMuted" d="M76 137h168M92 137v9h136v-9" />';
+  const standing = '<circle class="protocolSvgFigure" cx="160" cy="43" r="12"/><path class="protocolSvgFigure" d="M160 55v44m0-27-25 18m25-18 25 18m-25 9-19 37m19-37 19 37"/>';
+  const visuals = {
+    tare: `${plate}<path class="protocolSvgAccent" d="M135 83h50m-25-25v50"/><circle class="protocolSvgAccent" cx="160" cy="83" r="34"/>`,
+    step: `${plate}${standing}<path class="protocolSvgAccent" d="M112 47v54m0 0-10-13m10 13 10-13"/>`,
+    still: `${plate}${standing}<path class="protocolSvgAccent" d="M119 39v75m82-75v75"/><path class="protocolSvgMuted" d="M111 48h16m66 0h16"/>`,
+    squat: `${plate}<circle class="protocolSvgFigure" cx="148" cy="54" r="12"/><path class="protocolSvgFigure" d="M148 66l18 30 30 9m-30-9-29 12-20 28m20-28 30 28m-19-70-25 22"/>`,
+    jump: `${plate}<circle class="protocolSvgFigure" cx="160" cy="27" r="12"/><path class="protocolSvgFigure" d="M160 39v39m0-25-25-16m25 16 25-16m-25 41-22 28m22-28 22 28"/><path class="protocolSvgAccent" d="M160 124V91m0 0-10 13m10-13 10 13"/>`,
+    land: `${plate}<circle class="protocolSvgFigure" cx="160" cy="57" r="12"/><path class="protocolSvgFigure" d="M160 69v31m0-18-22 15m22-15 22 15m-22 3-24 36m24-36 24 36"/><path class="protocolSvgAccent" d="M112 55v44m0 0-9-12m9 12 9-12"/>`,
+    box: `${plate}<path class="protocolSvgMuted" d="M38 73h82v64H38z"/><circle class="protocolSvgFigure" cx="79" cy="30" r="11"/><path class="protocolSvgFigure" d="M79 41v38m0-21-21 13m21-13 21 13m-21 21-18 30m18-30 18 30"/><path class="protocolSvgAccent" d="M141 62h50m0 0-13-10m13 10-13 10"/>`,
+    drop: `${plate}<path class="protocolSvgMuted" d="M38 73h82v64H38z"/><circle class="protocolSvgFigure" cx="151" cy="50" r="11"/><path class="protocolSvgFigure" d="M151 61v35m0-18-19 13m19-13 19 13m-19 5-18 28m18-28 18 28"/><path class="protocolSvgAccent" d="M194 49v61m0 0-10-13m10 13 10-13"/>`,
+    rebound: `${plate}<circle class="protocolSvgFigure" cx="160" cy="65" r="11"/><path class="protocolSvgFigure" d="M160 76v26m0-14-22 10m22-10 22 10m-22 14-26 24m26-24 26 24"/><path class="protocolSvgAccent" d="M111 121V76m0 0-10 13m10-13 10 13M209 121V76m0 0-10 13m10-13 10 13"/>`,
+    setup: `${plate}<path class="protocolSvgMuted" d="M92 42h136v70H92z"/><path class="protocolSvgAccent" d="M111 65l8 8 17-20m-25 37 8 8 17-20m20-17h50m-50 25h50"/>`,
+    balance: `${plate}<circle class="protocolSvgFigure" cx="160" cy="39" r="12"/><path class="protocolSvgFigure" d="M160 51v45m0-27-27 8m27-8 27 8m-27 19v40m0-24 30 15"/><path class="protocolSvgAccent" d="M119 39c-12 21-12 48 0 69m82-69c12 21 12 48 0 69"/>`,
+    eyes: `${plate}${standing}<path class="protocolSvgAccent" d="M116 44c13-14 27-21 44-21s31 7 44 21c-13 14-27 21-44 21s-31-7-44-21Z"/><circle class="protocolSvgAccent" cx="160" cy="44" r="9"/>`,
+    force: `${plate}<circle class="protocolSvgFigure" cx="160" cy="50" r="12"/><path class="protocolSvgFigure" d="M160 62v35m0-20-26 15m26-15 26 15m-26 5-25 39m25-39 25 39"/><path class="protocolSvgAccent" d="M111 125V76m0 0-10 13m10-13 10 13m88 36V76m0 0-10 13m10-13 10 13"/>`,
+    release: `${plate}${standing}<path class="protocolSvgAccent" d="M111 72h29m-29 0 12-10m-12 10 12 10m86-10h-29m29 0-12-10m12 10-12 10"/>`,
+  };
+  const artwork = visuals[visual] || `${plate}${standing}`;
+  return `
+    <svg class="protocolIllustration" viewBox="0 0 320 180" role="img" aria-label="${escapeHtml(title)}">
+      ${artwork}
+    </svg>`;
+}
+
+function setProtocolDiscipline(disciplineId) {
+  const protocol = ForcePlateTestProtocols.find((item) => item.id === disciplineId) || ForcePlateTestProtocols[0];
+  state.protocolDiscipline = protocol.id;
+  controls.protocolTitle.textContent = protocol.label;
+  controls.protocolIntro.textContent = protocol.intro;
+  controls.protocolStepCount.textContent = `${protocol.steps.length} steps`;
+  controls.protocolDisciplineList.querySelectorAll('[data-protocol-discipline]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.protocolDiscipline === protocol.id);
+  });
+  controls.protocolSteps.innerHTML = protocol.steps.map((step, index) => `
+    <article class="protocolStep">
+      <div class="protocolStepNumber">${String(index + 1).padStart(2, '0')}</div>
+      <div class="protocolStepImage">${protocolIllustration(step.visual, step.title)}</div>
+      <div class="protocolStepDescription">
+        <small>Step ${index + 1}</small>
+        <h3>${escapeHtml(step.title)}</h3>
+        <p>${escapeHtml(step.description)}</p>
+      </div>
+    </article>`).join('');
+  controls.protocolSteps.scrollTop = 0;
+}
+
+function renderProtocolsView() {
+  controls.protocolDisciplineList.innerHTML = ForcePlateTestProtocols.map((protocol) => `
+    <button type="button" data-protocol-discipline="${escapeHtml(protocol.id)}">
+      <strong>${escapeHtml(protocol.label)}</strong>
+      <span>${protocol.steps.length} steps</span>
+    </button>`).join('');
+  setProtocolDiscipline(state.protocolDiscipline);
+}
+
 function setAppTab(tab) {
   state.appTab = tab;
   if (tab !== 'analyze' && state.balanceAnalyze.playing) {
@@ -2629,10 +2796,12 @@ function setAppTab(tab) {
   controls.appTabMeasure.classList.toggle('active', tab === 'measure');
   controls.appTabAnalyze.classList.toggle('active', tab === 'analyze');
   controls.appTabResults.classList.toggle('active', tab === 'results');
+  controls.appTabProtocols.classList.toggle('active', tab === 'protocols');
   controls.appTabSettings.classList.toggle('active', tab === 'settings');
   controls.measureView.classList.toggle('active', tab === 'measure');
   controls.analyzeView.classList.toggle('active', tab === 'analyze');
   controls.resultsView.classList.toggle('active', tab === 'results');
+  controls.protocolsView.classList.toggle('active', tab === 'protocols');
   controls.deviceSettingsView.classList.toggle('active', tab === 'settings');
   if (tab === 'settings') {
     startDeviceSettingsPolling();
@@ -2891,6 +3060,37 @@ function balanceResultDescriptor(result) {
   return [vision, stance, side, durationSec ? `${durationSec}s` : ''].filter(Boolean).join(' · ');
 }
 
+function resultPrimaryMetric(result, disciplineId, settings) {
+  const values = result?.metrics?.values || {};
+  const flightHeightCm = numberOrNaN(settings.flightHeightCm);
+  if (['squat_jump', 'countermovement_jump', 'drop_jump'].includes(disciplineId)
+      && finite(flightHeightCm)) {
+    return ['FT Height', `${flightHeightCm.toFixed(1)} cm`];
+  }
+  if (disciplineId === 'eyes_closed_balance') {
+    const velocityRatio = numberOrNaN(values.romberg?.meanVelocityRatio);
+    if (finite(velocityRatio)) {
+      return ['Velocity RQ', `${velocityRatio.toFixed(2)} x`];
+    }
+    const excursion = numberOrNaN(values.totalExcursionMm ?? values.closed?.totalExcursionMm);
+    if (finite(excursion)) return ['Total Excursion', `${excursion.toFixed(1)} mm`];
+  }
+  const metricRows = Array.isArray(result?.metrics?.metrics) ? result.metrics.metrics : [];
+  for (const row of metricRows) {
+    if (!Array.isArray(row) || row[0] === '__section' || !row[0] || row[1] == null) continue;
+    return [String(row[0]), String(row[1])];
+  }
+  return ['', ''];
+}
+
+function resultAttemptLabel(result, disciplineId, fallbackIndex) {
+  const settings = result?.disciplineSettings || result?.disciplineDefinition?.settings || {};
+  const attemptCode = String(settings.attemptCode || settings.attemptLabel || '');
+  const parsedNumber = attemptCode.match(/(?:^|_)(\d+)(?:\D|$)/)?.[1];
+  const attemptNumber = Number(settings.attemptNumber) || Number(parsedNumber) || fallbackIndex + 1;
+  return `${realtimeDisciplineShortLabel(disciplineId)} \u00b7 ${String(attemptNumber).padStart(2, '0')}`;
+}
+
 function renderTraceLibrary() {
   if (!state.resultLibrary.length) {
     controls.traceLibraryList.innerHTML = '<div class="traceEmpty">No session results loaded</div>';
@@ -2907,7 +3107,6 @@ function renderTraceLibrary() {
       || 'Discipline';
     const attemptCode = settings.attemptCode || settings.attemptLabel || '';
     const ftHeight = finite(settings.flightHeightCm) ? `${settings.flightHeightCm.toFixed(1)} cm` : '';
-    const balanceDetail = disciplineId === 'eyes_closed_balance' ? balanceResultDescriptor(result) : '';
     const mobileBalanceDetail = disciplineId === 'eyes_closed_balance'
       ? [
         normalizeBalanceVisionMode(settings.visionMode) === 'closed' ? 'EC' : 'EO',
@@ -2917,7 +3116,8 @@ function renderTraceLibrary() {
         Number(settings.durationSec) ? `${Number(settings.durationSec)}s` : '',
       ].filter(Boolean).join(' · ')
       : '';
-    const attemptDetail = balanceDetail || (ftHeight ? `FT height ${ftHeight}` : '');
+    const [primaryMetricLabel, primaryMetricValue] = resultPrimaryMetric(result, disciplineId, settings);
+    const compactAttemptLabel = resultAttemptLabel(result, disciplineId, item.index);
     const measuredAt = result.measuredAt ? new Date(result.measuredAt).toLocaleString() : '';
     const measuredTime = result.measuredAt
       ? new Date(result.measuredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -2932,9 +3132,14 @@ function renderTraceLibrary() {
         <span class="traceItemMobileDetail">${escapeHtml(mobileDetail)}</span>
         <time class="traceItemMobileTime" title="${escapeHtml(measuredAt)}">${escapeHtml(measuredTime)}</time>
       </span>
-      <div class="traceItemName">${escapeHtml(result.athleteName || 'Unknown athlete')}</div>
-      ${attemptCode || attemptDetail ? `<div class="traceItemAttempt">${escapeHtml(attemptCode || discipline)}${attemptDetail ? `<span>${escapeHtml(attemptDetail)}</span>` : ''}</div>` : ''}
-      <div class="traceItemMeta">${escapeHtml(discipline)}${measuredAt ? ` | ${escapeHtml(measuredAt)}` : ''}</div>
+      <span class="traceItemDesktopLine traceItemDesktopPrimary">
+        <strong>${escapeHtml(result.athleteName || 'Unknown athlete')}</strong>
+        <strong>${escapeHtml(compactAttemptLabel)}</strong>
+      </span>
+      <span class="traceItemDesktopLine traceItemDesktopMetric">
+        <span>${escapeHtml(primaryMetricLabel || discipline)}</span>
+        <strong>${escapeHtml(primaryMetricValue || '-')}</strong>
+      </span>
     </button>
   `;
   }).join('');
@@ -8831,24 +9036,16 @@ function drawBalanceAnalyzeLegacy() {
     ctx.restore();
   }
 
-  const descriptor = balanceResultDescriptor(result) || 'Balance';
   ctx.save();
-  ctx.fillStyle = 'rgba(255,246,228,0.94)';
-  ctx.font = `700 ${20 * ratio}px Trebuchet MS, Arial, sans-serif`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText('STATIC BALANCE', 24 * ratio, 18 * ratio);
-  ctx.fillStyle = 'rgba(255,147,9,0.88)';
   ctx.font = `600 ${13 * ratio}px Trebuchet MS, Arial, sans-serif`;
-  ctx.fillText(descriptor.toUpperCase(), 24 * ratio, 46 * ratio);
   ctx.fillStyle = 'rgba(255,246,228,0.54)';
   ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
+  ctx.textBaseline = 'bottom';
   const footer = motionMode
     ? `LOOP · ${playback.trailMs} ms trail · ${playback.fadeMs} ms fade`
     : `START ●  END ●  · ${validRows.length.toLocaleString()} COP samples · ${Math.round(1000 / sampleIntervalMs(state.rows))} Hz`;
   ctx.fillText(footer,
-    (width - 20) * ratio, 54 * ratio);
+    (width - 20) * ratio, (height - 48) * ratio);
   if (!validRows.length) {
     ctx.fillStyle = 'rgba(255,246,228,0.72)';
     ctx.font = `600 ${18 * ratio}px Trebuchet MS, Arial, sans-serif`;
@@ -9252,18 +9449,11 @@ function drawBalanceAnalyze() {
   series.forEach((item) => drawBalanceAnalyzeSeries(item, layout, settings, playback, motionMode, ratio));
   drawBalanceAnalyzeSecondLegTapRipples(layout, settings, playback, motionMode, ratio);
 
-  const descriptor = balanceResultDescriptor(result) || 'Static Balance';
   ctx.save();
-  ctx.fillStyle = 'rgba(255,246,228,0.94)';
-  ctx.font = `700 ${20 * ratio}px Trebuchet MS, Arial, sans-serif`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText('STATIC BALANCE', 24 * ratio, 18 * ratio);
-  ctx.fillStyle = 'rgba(255,147,9,0.88)';
   ctx.font = `600 ${13 * ratio}px Trebuchet MS, Arial, sans-serif`;
-  ctx.fillText(descriptor.toUpperCase(), 24 * ratio, 46 * ratio);
   if (paired) {
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
     ctx.fillStyle = '#3bbcf2';
     ctx.fillText('EO  EYES OPEN', width * 0.44 * ratio, 46 * ratio);
     ctx.fillStyle = '#ff9309';
@@ -9271,13 +9461,14 @@ function drawBalanceAnalyze() {
   }
   ctx.fillStyle = 'rgba(255,246,228,0.54)';
   ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
   const sampleCount = series.reduce((sum, item) => sum + item.rows.length, 0);
   const heatmapLabel = playback.heatmapMode === 'open' ? 'HEATMAP EO · '
     : playback.heatmapMode === 'closed' ? 'HEATMAP EC · ' : '';
   const footer = motionMode
     ? `LOOP · ${heatmapLabel}${playback.trailMs} ms trail · ${playback.fadeMs} ms fade`
     : `${heatmapLabel}${paired ? 'EO + EC · ' : ''}${sampleCount.toLocaleString()} COP samples · ${Math.round(1000 / sampleIntervalMs(state.rows))} Hz`;
-  ctx.fillText(footer, (width - 20) * ratio, 54 * ratio);
+  ctx.fillText(footer, (width - 20) * ratio, (height - 48) * ratio);
   if (!sampleCount) {
     ctx.fillStyle = 'rgba(255,246,228,0.72)';
     ctx.font = `600 ${18 * ratio}px Trebuchet MS, Arial, sans-serif`;
@@ -9288,6 +9479,46 @@ function drawBalanceAnalyze() {
   ctx.restore();
   drawBalanceTimeline();
   syncBalanceAnalyzeControls();
+}
+
+function activeAnalyzeSessionSummary() {
+  const active = state.analyzeResult;
+  if (!active?.session) return null;
+  const items = state.resultLibrary.filter((item) => item.sourceKey === active.sourceKey);
+  const athleteKeys = new Set(items.map((item) =>
+    item.result.athleteId || item.result.athleteSnapshot?.athleteId || item.result.athleteName).filter(Boolean));
+  const disciplineKeys = new Set(items.map((item) =>
+    item.result.disciplineDefinition?.discipline || item.result.discipline).filter(Boolean));
+  const session = active.session;
+  const timestamp = session.startedAt || session.createdAt || session.updatedAt || active.result.measuredAt;
+  const date = timestamp ? new Date(timestamp).toLocaleDateString() : '';
+  return {
+    title: [session.name || 'Unnamed session', date].filter(Boolean).join(' \u00b7 '),
+    detail: `${athleteKeys.size} athletes \u00b7 ${disciplineKeys.size} disciplines \u00b7 ${items.length} attempts`,
+  };
+}
+
+function drawAnalyzeSessionHud() {
+  const summary = activeAnalyzeSessionSummary();
+  if (!summary) return;
+  const ratio = window.devicePixelRatio || 1;
+  const mobile = ForcePlateMobileMode;
+  const desktopWatermark = !mobile;
+  const x = chart.width - (desktopWatermark ? 48 : 18) * ratio;
+  const titleY = (mobile ? 48 : 52) * ratio;
+  const detailY = (mobile ? 68 : 100) * ratio;
+  const titleSize = mobile ? 14 : 40;
+  const detailSize = mobile ? 11 : 26;
+  ctx.save();
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = `rgba(255,246,228,${desktopWatermark ? 0.5 : 0.94})`;
+  ctx.font = `700 ${titleSize * ratio}px Trebuchet MS, Arial, sans-serif`;
+  ctx.fillText(summary.title, x, titleY);
+  ctx.fillStyle = `rgba(255,147,9,${desktopWatermark ? 0.5 : 0.88})`;
+  ctx.font = `600 ${detailSize * ratio}px Trebuchet MS, Arial, sans-serif`;
+  ctx.fillText(summary.detail, x, detailY);
+  ctx.restore();
 }
 
 function draw() {
@@ -9301,12 +9532,14 @@ function draw() {
 
   if (!state.rows.length) {
     drawLabel('Load a trace CSV', 50, 50, '#fff6e4');
+    drawAnalyzeSessionHud();
     renderMetrics();
     return;
   }
 
   if (isBalanceAnalyze()) {
     drawBalanceAnalyze();
+    drawAnalyzeSessionHud();
     if (!state.balanceAnalyze.playing) renderMetrics();
     return;
   }
@@ -9383,10 +9616,9 @@ function draw() {
   drawFocusWindowOverlay();
   drawSampleRateLabel(ctx, chart.clientWidth || 1, chart.clientHeight || 1, window.devicePixelRatio || 1, state.rows);
 
-  const caption = state.viewMode === 'total'
-    ? `Blue LEFT, red RIGHT, green TOTAL. ${state.forceMode.toUpperCase()} ${state.discipline.replace('_', ' ').toUpperCase()}`
-    : `${state.viewMode.toUpperCase()} ${state.forceMode.toUpperCase()} ${state.discipline.replace('_', ' ').toUpperCase()}`;
-  drawLabel(caption, r.left + 6, r.top + 16, hexToRgba(landmarkStyle.xAxisText, 0.85));
+  const caption = state.viewMode === 'total' ? 'Blue LEFT, red RIGHT, green TOTAL.' : '';
+  if (caption) drawLabel(caption, r.left + 6, r.top + 16, hexToRgba(landmarkStyle.xAxisText, 0.85));
+  drawAnalyzeSessionHud();
   renderMetrics();
 }
 
@@ -10336,7 +10568,12 @@ function updateHoverCursor(event) {
 controls.appTabMeasure.addEventListener('click', () => setAppTab('measure'));
 controls.appTabAnalyze.addEventListener('click', () => setAppTab('analyze'));
 controls.appTabResults.addEventListener('click', () => setAppTab('results'));
+controls.appTabProtocols.addEventListener('click', () => setAppTab('protocols'));
 controls.appTabSettings.addEventListener('click', () => setAppTab('settings'));
+controls.protocolDisciplineList.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-protocol-discipline]');
+  if (button) setProtocolDiscipline(button.dataset.protocolDiscipline);
+});
 controls.deviceBoardSelect.addEventListener('change', () => {
   state.deviceSettings.lastStage = '';
   state.deviceSettings.history = [];
@@ -10461,6 +10698,7 @@ controls.realtimeAutoY.addEventListener('change', () => {
   state.realtime.autoY = controls.realtimeAutoY.checked;
   drawRealtime();
 });
+controls.realtimeSampleRate.addEventListener('change', syncRealtimeSettingsSummary);
 controls.realtimeRenderBuffer.addEventListener('change', () => {
   syncRealtimeRenderBufferControls();
   if (state.realtime.live) {
@@ -10746,9 +10984,13 @@ initializeSessionControls().catch((error) => setStatus(`Athletes load error: ${e
 refreshNativeResultsFolder({ quiet: true }).catch((error) => setStatus(`Results load error: ${error.message}`));
 setMeasurePanelTab('session');
 syncRealtimeRenderBufferControls();
+syncRealtimeSettingsSummary();
+syncRealtimeMeasuringSummary();
+syncSessionMeasuringSummary();
 syncBalanceStanceMode();
 renderRealtimeRunState();
 renderMeasurementRunState();
+renderProtocolsView();
 setAppTab('measure');
 draw();
   drawRealtime();

@@ -11,6 +11,7 @@
     analyze: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m5 10V5m6 14v-7m5 7V3"/></svg>',
     settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.5 1a7 7 0 0 0-1.7-1L14.3 3h-4.1l-.4 2.9a7 7 0 0 0-1.7 1l-2.5-1-2 3.4 2 1.6a7 7 0 0 0 0 2.1l-2 1.6 2 3.4 2.5-1a7 7 0 0 0 1.7 1l.4 2.9h4.1l.4-2.9a7 7 0 0 0 1.7-1l2.5 1 2-3.4-2-1.6a7 7 0 0 0 .1-1Z"/></svg>',
     results: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h6M9 7h3"/></svg>',
+    protocols: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H12v18H7.5A3.5 3.5 0 0 0 4 23zM20 5.5A3.5 3.5 0 0 0 16.5 2H12v18h4.5A3.5 3.5 0 0 1 20 23z"/><path d="M7 7h2M7 11h2M15 7h2M15 11h2"/></svg>',
   };
 
   let activeViewportSelect = null;
@@ -99,6 +100,7 @@
     ['appTabMeasure', 'measure', 'Measure'],
     ['appTabAnalyze', 'analyze', 'Analyze'],
     ['appTabSettings', 'settings', 'Settings'],
+    ['appTabProtocols', 'protocols', 'Protocols'],
     ['appTabResults', 'results', 'Results'],
   ].forEach(([id, icon, label]) => {
     const button = document.getElementById(id);

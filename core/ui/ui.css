@@ -8,6 +8,18 @@ body {
   min-height: 100%;
 }
 
+h1,
+h2,
+h3,
+label,
+legend,
+th,
+.jb-display {
+  font-family: var(--jb-font-display);
+  font-size-adjust: var(--jb-font-display-adjust);
+  letter-spacing: var(--jb-font-display-spacing);
+}
+
 body {
   background: var(--jb-color-bg-app);
   color: var(--jb-color-text);
@@ -23,8 +35,11 @@ button,
   color: var(--jb-button-01-text);
   padding: 8px 12px;
   font: inherit;
+  font-family: var(--jb-font-display);
+  font-size-adjust: var(--jb-font-display-adjust);
   font-size: var(--jb-font-size-button-01);
   font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
   cursor: pointer;
 }
 
@@ -72,6 +87,9 @@ select {
   color: var(--jb-input-small-text);
   padding: 0 10px;
   font: inherit;
+  font-family: var(--jb-font-ui);
+  font-size-adjust: none;
+  letter-spacing: 0;
 }
 
 .jb-panel {
