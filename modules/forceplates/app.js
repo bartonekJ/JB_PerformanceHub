@@ -3860,12 +3860,12 @@ function renderMetrics() {
         const count = entries.length;
         const open = !state.collapsedMetricGroups.has(title);
         return `
-          <details class="metricGroup" data-metric-group-key="${escapeHtml(title)}"${open ? ' open' : ''}>
+          <details class="collapsibleSection metricGroup" data-metric-group-key="${escapeHtml(title)}"${open ? ' open' : ''}>
             <summary>
-              <strong class="metricGroupTitle">${escapeHtml(title)}</strong>
-              <small>${count}</small>
+              <strong class="collapsibleSectionTitle">${escapeHtml(title)}</strong>
+              <small class="collapsibleSectionInfo">${count}</small>
             </summary>
-            <div class="metricGroupBody">
+            <div class="collapsibleSectionBody metricGroupBody">
               ${renderMetricGroupBody(entries)}
             </div>
           </details>`;

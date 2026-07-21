@@ -118,6 +118,30 @@
     byId("photoCropY").value = String(editor.crop.centerY / editor.height * 100);
     byId("photoCropZoom").value = String(editor.baseCrop.size / editor.crop.size * 100);
     byId("photoCropRotation").value = String(editor.crop.rotationDeg);
+    byId("photoBackgroundMode").value = editor.effect.mode;
+    byId("photoBackgroundBlur").value = String(editor.effect.blur);
+    byId("photoMaskInset").value = String(editor.effect.inset);
+    syncBackgroundControls();
+  }
+
+  function syncBackgroundControls() {
+    const editor = state.photoEditor;
+    if (!editor) return;
+    const available = Boolean(editor.maskImage);
+    const mode = available ? editor.effect.mode : "original";
+    if (!available) editor.effect.mode = "original";
+    byId("photoBackgroundMode").disabled = !available;
+    byId("photoMaskInset").disabled = !available;
+    byId("photoBackgroundMode").value = mode;
+    byId("photoBackgroundBlurRow").hidden = mode !== "blur";
+    byId("photoBackgroundBlurValue").textContent = String(Math.round(editor.effect.blur));
+    const inset = Math.round(editor.effect.inset);
+    byId("photoMaskInsetValue").textContent = `${inset > 0 ? "+" : ""}${inset} px`;
+    byId("photoBackgroundStatus").textContent = available
+      ? "PP-HumanSeg mask ready · background effect is applied before the 512 px avatar is saved"
+      : "Person mask unavailable · original background will be used";
+    byId("photoBackgroundMode").closest(".ph-photo-background-controls")
+      ?.classList.toggle("is-unavailable", !available);
   }
 
   function syncCropFromControls() {
@@ -130,20 +154,101 @@
     renderPhotoCrop();
   }
 
+  function drawEditorLayer(context, image, editor, mask = false) {
+    context.save();
+    context.translate(256, 256);
+    context.rotate(-editor.crop.rotationDeg * Math.PI / 180);
+    const scale = 512 / editor.crop.size;
+    context.scale(scale, scale);
+    if (mask) {
+      context.drawImage(image, -editor.crop.centerX, -editor.crop.centerY, editor.width, editor.height);
+    } else {
+      context.drawImage(image, -editor.crop.centerX, -editor.crop.centerY);
+    }
+    context.restore();
+  }
+
   function renderPhotoCrop() {
     const editor = state.photoEditor;
     if (!editor) return;
     const canvas = byId("photoCropCanvas");
     const context = canvas.getContext("2d", { alpha: false });
-    context.save();
-    context.fillStyle = "#202020";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.translate(canvas.width / 2, canvas.height / 2);
-    context.rotate(-editor.crop.rotationDeg * Math.PI / 180);
-    const scale = canvas.width / editor.crop.size;
-    context.scale(scale, scale);
-    context.drawImage(editor.image, -editor.crop.centerX, -editor.crop.centerY);
-    context.restore();
+    const original = document.createElement("canvas");
+    original.width = original.height = 512;
+    const originalContext = original.getContext("2d", { alpha: false });
+    originalContext.fillStyle = "#202020";
+    originalContext.fillRect(0, 0, 512, 512);
+    drawEditorLayer(originalContext, editor.image, editor);
+
+    const mode = editor.maskImage ? editor.effect.mode : "original";
+    if (mode === "original") {
+      context.drawImage(original, 0, 0);
+    } else {
+      if (mode === "blur") {
+        const blur = Math.max(2, Number(editor.effect.blur) || 18);
+        const padding = Math.ceil(blur * 1.5);
+        context.save();
+        context.filter = `blur(${blur}px)`;
+        context.drawImage(original, -padding, -padding, 512 + padding * 2, 512 + padding * 2);
+        context.restore();
+      } else {
+        context.fillStyle = "#2f2f2c";
+        context.fillRect(0, 0, 512, 512);
+      }
+
+      const maskCanvas = document.createElement("canvas");
+      maskCanvas.width = maskCanvas.height = 512;
+      const maskContext = maskCanvas.getContext("2d");
+      maskContext.fillStyle = "#000";
+      maskContext.fillRect(0, 0, 512, 512);
+      drawEditorLayer(maskContext, editor.maskImage, editor, true);
+      const maskPixels = maskContext.getImageData(0, 0, 512, 512);
+      for (let index = 0; index < maskPixels.data.length; index += 4) {
+        const probability = maskPixels.data[index] / 255;
+        const normalized = Math.min(1, Math.max(0, (probability - 0.08) / 0.82));
+        const alpha = Math.round(normalized * normalized * (3 - 2 * normalized) * 255);
+        maskPixels.data[index] = 255;
+        maskPixels.data[index + 1] = 255;
+        maskPixels.data[index + 2] = 255;
+        maskPixels.data[index + 3] = alpha;
+      }
+      maskContext.putImageData(maskPixels, 0, 0);
+      const inset = Math.round(Math.min(2, Math.max(-2, Number(editor.effect.inset) || 0)));
+      if (inset > 0) {
+        const sourceMask = document.createElement("canvas");
+        sourceMask.width = sourceMask.height = 512;
+        sourceMask.getContext("2d").drawImage(maskCanvas, 0, 0);
+        const diagonal = Math.max(1, Math.round(inset * 0.7));
+        const offsets = [
+          [-inset, 0], [inset, 0], [0, -inset], [0, inset],
+          [-diagonal, -diagonal], [diagonal, -diagonal],
+          [-diagonal, diagonal], [diagonal, diagonal],
+        ];
+        maskContext.globalCompositeOperation = "destination-in";
+        offsets.forEach(([x, y]) => maskContext.drawImage(sourceMask, x, y));
+        maskContext.globalCompositeOperation = "source-over";
+      } else if (inset < 0) {
+        const sourceMask = document.createElement("canvas");
+        sourceMask.width = sourceMask.height = 512;
+        sourceMask.getContext("2d").drawImage(maskCanvas, 0, 0);
+        const radius = Math.abs(inset);
+        const diagonal = Math.max(1, Math.round(radius * 0.7));
+        const offsets = [
+          [-radius, 0], [radius, 0], [0, -radius], [0, radius],
+          [-diagonal, -diagonal], [diagonal, -diagonal],
+          [-diagonal, diagonal], [diagonal, diagonal],
+        ];
+        offsets.forEach(([x, y]) => maskContext.drawImage(sourceMask, x, y));
+      }
+
+      const foreground = document.createElement("canvas");
+      foreground.width = foreground.height = 512;
+      const foregroundContext = foreground.getContext("2d");
+      foregroundContext.drawImage(original, 0, 0);
+      foregroundContext.globalCompositeOperation = "destination-in";
+      foregroundContext.drawImage(maskCanvas, 0, 0);
+      context.drawImage(foreground, 0, 0);
+    }
     byId("photoCropXValue").textContent = `${Math.round(editor.crop.centerX)} px`;
     byId("photoCropYValue").textContent = `${Math.round(editor.crop.centerY)} px`;
     byId("photoCropZoomValue").textContent = `${Math.round(Number(byId("photoCropZoom").value))}%`;
@@ -180,6 +285,18 @@
           detected: false,
           confidence: 0,
         };
+    let maskImage = null;
+    if (analysis?.segmentation?.available && analysis.segmentation.maskData) {
+      try {
+        maskImage = await loadImage(analysis.segmentation.maskData);
+      } catch (error) {
+        console.warn("PP-HumanSeg preview mask could not be decoded", error);
+      }
+    }
+    const savedEffect = currentEditedAthlete()?.photoEffect;
+    const effectMode = ["original", "blur", "neutral"].includes(savedEffect?.mode)
+      ? savedEffect.mode
+      : "original";
     state.photoEditor = {
       image,
       imageData,
@@ -187,6 +304,14 @@
       height,
       baseCrop,
       crop: { ...baseCrop },
+      maskImage,
+      effect: {
+        mode: maskImage ? effectMode : "original",
+        blur: Math.min(40, Math.max(2, Number(savedEffect?.blur) || 18)),
+        // Mask boundaries are photo-specific, so every newly captured or chosen
+        // source starts from a neutral edge even when replacing an older photo.
+        inset: 0,
+      },
     };
     setCropControlsFromEditor();
     byId("photoDetectionStatus").textContent = analysisError
@@ -418,7 +543,11 @@
       } else if (savedAthleteId && state.pendingPhoto) {
         await request(`/api/athletes/${savedAthleteId}/photo`, {
           method: "PUT",
-          body: JSON.stringify({ imageData: state.pendingPhoto.imageData, crop: state.pendingPhoto.crop }),
+          body: JSON.stringify({
+            imageData: state.pendingPhoto.imageData,
+            crop: state.pendingPhoto.crop,
+            effect: state.pendingPhoto.effect,
+          }),
         });
       }
       resetAthleteEditor();
@@ -508,6 +637,24 @@
   ["photoCropX", "photoCropY", "photoCropZoom", "photoCropRotation"].forEach(id => {
     byId(id).addEventListener("input", syncCropFromControls);
   });
+  byId("photoBackgroundMode").addEventListener("change", event => {
+    if (!state.photoEditor) return;
+    state.photoEditor.effect.mode = event.target.value;
+    syncBackgroundControls();
+    renderPhotoCrop();
+  });
+  byId("photoBackgroundBlur").addEventListener("input", event => {
+    if (!state.photoEditor) return;
+    state.photoEditor.effect.blur = Number(event.target.value) || 18;
+    syncBackgroundControls();
+    renderPhotoCrop();
+  });
+  byId("photoMaskInset").addEventListener("input", event => {
+    if (!state.photoEditor) return;
+    state.photoEditor.effect.inset = Number(event.target.value) || 0;
+    syncBackgroundControls();
+    renderPhotoCrop();
+  });
   byId("photoCropReset").addEventListener("click", () => {
     if (!state.photoEditor) return;
     state.photoEditor.crop = { ...state.photoEditor.baseCrop };
@@ -521,6 +668,7 @@
     state.pendingPhoto = {
       imageData: state.photoEditor.imageData,
       crop: { ...state.photoEditor.crop },
+      effect: { ...state.photoEditor.effect },
       previewData,
     };
     state.removePhoto = false;

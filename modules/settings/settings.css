@@ -97,6 +97,11 @@
 .ph-camera-tools label { display: grid; grid-template-columns: 1fr auto; gap: 6px; color: var(--jb-color-text-muted); font-family: var(--jb-font-display); font-size-adjust: var(--jb-font-display-adjust); letter-spacing: var(--jb-font-display-spacing); }
 .ph-photo-controls output { color: var(--jb-color-text); font-family: var(--jb-font-ui); }
 .ph-photo-controls input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--jb-module-primary); }
+.ph-photo-background-controls { display: grid; gap: 10px; padding: 10px; border: 1px solid var(--jb-color-line-soft); background: var(--jb-color-bg-panel-2); }
+.ph-photo-background-controls label select { grid-column: 1 / -1; width: 100%; }
+.ph-photo-background-controls > small { color: var(--jb-color-text-muted); line-height: 1.35; }
+.ph-photo-background-controls.is-unavailable { opacity: .58; }
+.ph-photo-background-controls [hidden] { display: none; }
 .ph-photo-tip { padding: 10px; border-left: 3px solid var(--jb-module-primary); background: var(--jb-module-primary-soft); color: var(--jb-color-text-muted); }
 
 .ph-camera-dialog { width: min(920px, calc(100vw - 48px)); }

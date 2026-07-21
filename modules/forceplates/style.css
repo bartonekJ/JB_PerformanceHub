@@ -1892,7 +1892,7 @@ html:not(.fpMobileApp) #realtimePane.sidePane.active {
 
 .settingsPanel {
   min-height: 0;
-  background: var(--panel-2);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0 10px 10px;
@@ -2239,7 +2239,7 @@ canvas.landmarkDragging {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
-  background: var(--panel-2);
+  background: var(--panel);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
   overflow: hidden;
@@ -2252,7 +2252,7 @@ canvas.landmarkDragging {
   flex-direction: column;
   gap: 8px;
   padding: 8px 4px 8px 8px;
-  background: var(--panel-2);
+  background: var(--panel);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
   overflow-x: hidden;
@@ -2622,64 +2622,11 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
 
 .metricGroup {
   flex: 0 0 auto;
-  padding: 0 0 10px;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--line-soft);
-  border-radius: 0;
-}
-
-.metricGroup > summary {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--line-soft);
-  border-radius: 4px;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-
-.metricGroup > summary::-webkit-details-marker {
-  display: none;
-}
-
-.metricGroup > summary::before {
-  content: '▶';
-  flex: 0 0 auto;
-  color: var(--accent);
-  font-size: 9px;
-  transform-origin: center;
-  transition: transform 120ms ease;
-}
-
-.metricGroup[open] > summary::before {
-  transform: rotate(90deg);
-}
-
-.metricGroupTitle {
-  color: var(--text);
-  font-size: 15px;
-  font-size-adjust: var(--jb-font-display-adjust);
-  font-weight: 700;
-  letter-spacing: var(--jb-font-display-spacing);
-}
-
-.metricGroup > summary small {
-  margin-left: auto;
-  color: var(--muted);
-  font-family: var(--jb-font-ui);
-  font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  margin: 0;
 }
 
 .metricGroupBody {
-  padding: 8px 2px 0 10px;
+  padding: 0 2px;
 }
 
 .metricFamily + .metricFamily {

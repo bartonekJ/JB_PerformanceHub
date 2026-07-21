@@ -139,6 +139,18 @@
         <label>Vertical Position <output id="photoCropYValue"></output><input id="photoCropY" type="range" min="0" max="100" step="0.1"></label>
         <label>Zoom <output id="photoCropZoomValue"></output><input id="photoCropZoom" type="range" min="50" max="300" step="1" value="100"></label>
         <label>Rotation <output id="photoCropRotationValue"></output><input id="photoCropRotation" type="range" min="-30" max="30" step="0.1" value="0"></label>
+        <div class="ph-photo-background-controls">
+          <label>Background
+            <select id="photoBackgroundMode">
+              <option value="original">Original</option>
+              <option value="blur">Blur</option>
+              <option value="neutral">Neutral</option>
+            </select>
+          </label>
+          <label id="photoBackgroundBlurRow">Blur Strength <output id="photoBackgroundBlurValue">18</output><input id="photoBackgroundBlur" type="range" min="2" max="40" step="1" value="18"></label>
+          <label id="photoMaskInsetRow">Mask Edge <output id="photoMaskInsetValue">0 px</output><input id="photoMaskInset" type="range" min="-2" max="2" step="1" value="0"></label>
+          <small id="photoBackgroundStatus">PP-HumanSeg is preparing the athlete mask…</small>
+        </div>
         <div class="ph-photo-tip">Drag the preview to reposition. Use the mouse wheel to zoom.</div>
         <button id="photoCropReset" type="button">RESET AUTO ALIGNMENT</button>
       </div>
@@ -173,6 +185,6 @@
 <script src="../../core/config/config.js"></script>
 <script src="../../core/ui/workspace.js"></script>
 <script src="../../core/ui/dialog.js"></script>
-<script src="settings.js?v=20260721-athlete-photo3"></script>
+<script src="settings.js?v=20260721-athlete-background3"></script>
 </body>
 </html>
