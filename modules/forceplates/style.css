@@ -1433,9 +1433,13 @@ html:not(.fpMobileApp) #realtimePane.sidePane.active {
 }
 
 .protocolStep {
-  min-height: 178px;
+  --protocol-card-size: clamp(240px, 23vw, 360px);
+  height: var(--protocol-card-size);
+  min-height: var(--protocol-card-size);
+  max-height: var(--protocol-card-size);
   display: grid;
-  grid-template-columns: 64px minmax(220px, 320px) minmax(260px, 1fr);
+  grid-template-columns: 64px var(--protocol-card-size) minmax(260px, 1fr);
+  grid-template-rows: var(--protocol-card-size);
   align-items: stretch;
   background: var(--panel-2);
   border: 1px solid var(--line-soft);
@@ -1446,7 +1450,7 @@ html:not(.fpMobileApp) #realtimePane.sidePane.active {
 .protocolStepNumber {
   display: grid;
   place-items: center;
-  background: rgba(255, 147, 9, .1);
+  background: var(--panel-2);
   border-right: 1px solid var(--line-soft);
   color: var(--accent);
   font-family: var(--jb-font-emphasis);
@@ -1457,16 +1461,35 @@ html:not(.fpMobileApp) #realtimePane.sidePane.active {
 
 .protocolStepImage {
   min-width: 0;
+  width: var(--protocol-card-size);
+  height: var(--protocol-card-size);
+  aspect-ratio: auto;
+  align-self: stretch;
   display: grid;
   place-items: center;
-  padding: 8px 14px;
+  padding: 12px;
   background: #20211f;
   border-right: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+
+.protocolStepImage.hasPhoto {
+  padding: 0;
+  background: #d8d2ca;
+}
+
+.protocolStepImage img {
+  width: var(--protocol-card-size);
+  height: var(--protocol-card-size);
+  aspect-ratio: auto;
+  display: block;
+  object-fit: contain;
 }
 
 .protocolIllustration {
   width: 100%;
-  height: 160px;
+  height: auto;
+  aspect-ratio: 1 / 1;
   display: block;
 }
 
@@ -1493,7 +1516,9 @@ html:not(.fpMobileApp) #realtimePane.sidePane.active {
 
 .protocolStepDescription {
   align-self: center;
+  max-height: var(--protocol-card-size);
   padding: 22px 26px;
+  overflow-y: auto;
 }
 
 .protocolStepDescription h3 {

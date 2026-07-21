@@ -11,6 +11,7 @@ tasks.register("syncPerformanceHubWeb", Sync) {
         include "core/theme/tokens.css"
         include "core/ui/ui.css"
         include "core/ui/workspace.css"
+        include "core/ui/dialog.js"
         include "modules/forceplates/**"
     }
     into generatedWebAssets

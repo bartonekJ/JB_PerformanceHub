@@ -897,9 +897,12 @@ html.fpMobileApp .protocolSteps {
 }
 
 html.fpMobileApp .protocolStep {
+  --protocol-card-size: calc(100vw - 64px);
+  height: auto;
   min-height: 0;
+  max-height: none;
   grid-template-columns: 42px minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: var(--protocol-card-size) auto;
 }
 
 html.fpMobileApp .protocolStepNumber {
@@ -911,20 +914,29 @@ html.fpMobileApp .protocolStepNumber {
 html.fpMobileApp .protocolStepImage {
   grid-column: 2;
   grid-row: 1;
-  min-height: 126px;
-  padding: 4px 10px;
+  min-height: 0;
+  width: 100%;
+  height: var(--protocol-card-size);
+  padding: 8px;
   border-right: 0;
   border-bottom: 1px solid var(--jb-color-line-soft, #3f3b35);
 }
 
-html.fpMobileApp .protocolIllustration {
-  height: 126px;
+html.fpMobileApp .protocolStepImage.hasPhoto {
+  padding: 0;
+}
+
+html.fpMobileApp .protocolStepImage img {
+  width: 100%;
+  height: var(--protocol-card-size);
 }
 
 html.fpMobileApp .protocolStepDescription {
   grid-column: 2;
   grid-row: 2;
   padding: 13px 15px 15px;
+  max-height: none;
+  overflow: visible;
 }
 
 html.fpMobileApp .protocolStepDescription h3 {
@@ -1136,8 +1148,12 @@ html.fpMobileApp .protocolStepDescription p {
   }
 
   html.fpMobileApp .protocolStep {
-    grid-template-columns: 38px minmax(150px, 220px) minmax(220px, 1fr);
-    grid-template-rows: minmax(126px, auto);
+    --protocol-card-size: clamp(150px, 24vw, 220px);
+    height: var(--protocol-card-size);
+    min-height: var(--protocol-card-size);
+    max-height: var(--protocol-card-size);
+    grid-template-columns: 38px var(--protocol-card-size) minmax(220px, 1fr);
+    grid-template-rows: var(--protocol-card-size);
   }
 
   html.fpMobileApp .protocolStepNumber {
@@ -1148,6 +1164,8 @@ html.fpMobileApp .protocolStepDescription p {
   html.fpMobileApp .protocolStepImage {
     grid-column: 2;
     grid-row: 1;
+    width: var(--protocol-card-size);
+    height: var(--protocol-card-size);
     border-right: 1px solid var(--jb-color-line-soft, #3f3b35);
     border-bottom: 0;
   }
@@ -1156,6 +1174,8 @@ html.fpMobileApp .protocolStepDescription p {
     grid-column: 3;
     grid-row: 1;
     align-self: center;
+    max-height: var(--protocol-card-size);
+    overflow-y: auto;
   }
 }
 

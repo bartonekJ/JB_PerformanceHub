@@ -18,10 +18,10 @@ const ForcePlateTestProtocols = [
     label: 'Squat Jump',
     intro: 'A vertical jump from a stable squat position without a countermovement.',
     steps: [
-      { visual: 'step', title: 'Step onto the plates', description: 'Stand with one foot centered on each plate. Keep your hands on your hips and wait for weighing to finish.' },
-      { visual: 'squat', title: 'Set the squat position', description: 'Lower into the prescribed squat depth and hold the position. Keep the trunk controlled and both feet fully supported.' },
-      { visual: 'jump', title: 'Jump on GO', description: 'Jump vertically as high and as fast as possible without dipping lower before take-off. Keep your hands on your hips.' },
-      { visual: 'land', title: 'Land and stand still', description: 'Land with one foot on each plate, absorb the impact naturally and remain still until the test is complete.' },
+      { image: 'assets/protocols/CMJ_04.jpg', visual: 'squat', title: 'Set the squat position', description: 'Lower into the prescribed squat depth and hold the position. Keep the trunk controlled, hands on hips and both feet fully supported.' },
+      { image: 'assets/protocols/CMJ_03.jpg', visual: 'jump', title: 'Jump on GO', description: 'Jump vertically as high and as fast as possible without dipping lower before take-off. Keep your hands on your hips.' },
+      { image: 'assets/protocols/CMJ_04.jpg', visual: 'land', title: 'Land on both plates', description: 'Land with one foot on each plate and absorb the impact naturally without leaving the measurement area.' },
+      { image: 'assets/protocols/CMJ_01.jpg', visual: 'still', title: 'Stand still', description: 'Regain an upright position and remain still until the routine confirms that the test is complete.' },
     ],
   },
   {
@@ -29,10 +29,11 @@ const ForcePlateTestProtocols = [
     label: 'Countermovement Jump',
     intro: 'A maximal vertical jump using one continuous downward and upward movement.',
     steps: [
-      { visual: 'step', title: 'Step onto the plates', description: 'Stand upright with one foot centered on each plate. Keep your hands on your hips while body mass is measured.' },
-      { visual: 'still', title: 'Hold the start position', description: 'Stand tall, look forward and remain still. Do not begin the movement before the GO instruction.' },
-      { visual: 'jump', title: 'Countermove and jump', description: 'On GO, perform one natural countermovement and immediately jump vertically with maximal intent.' },
-      { visual: 'land', title: 'Land and stabilize', description: 'Return to both plates, control the landing and remain still until the routine confirms completion.' },
+      { image: 'assets/protocols/CMJ_01.jpg', visual: 'still', title: 'Hold the start position', description: 'Stand upright with one foot centered on each plate. Keep your hands on your hips while body mass is measured.' },
+      { image: 'assets/protocols/CMJ_02.jpg', visual: 'squat', title: 'Perform one countermovement', description: 'On GO, move down naturally and immediately reverse the movement. Keep both feet in contact with the plates.' },
+      { image: 'assets/protocols/CMJ_03.jpg', visual: 'jump', title: 'Jump with maximal intent', description: 'Continue directly upward and jump as high as possible. Keep your hands on your hips throughout the flight.' },
+      { image: 'assets/protocols/CMJ_04.jpg', visual: 'land', title: 'Land on both plates', description: 'Return with one foot on each plate and absorb the impact naturally without leaving the measurement area.' },
+      { image: 'assets/protocols/CMJ_05.jpg', visual: 'still', title: 'Stand still', description: 'Regain an upright position and remain still until the routine confirms that the test is complete.' },
     ],
   },
   {
@@ -40,10 +41,12 @@ const ForcePlateTestProtocols = [
     label: 'Drop Jump',
     intro: 'A reactive jump performed immediately after stepping from a box of known height.',
     steps: [
-      { visual: 'box', title: 'Prepare on the box', description: 'Set the correct box height. Stand at the front edge with hands on hips and the plates clear in front of you.' },
-      { visual: 'drop', title: 'Step off the box', description: 'Step forward and allow gravity to bring you down. Do not jump upward or deliberately push away from the box.' },
-      { visual: 'rebound', title: 'Land and rebound', description: 'Land with one foot on each plate and jump again immediately. Aim for a short contact time and maximal jump height.' },
-      { visual: 'land', title: 'Final landing', description: 'Land back on the plates after the rebound, regain balance and stand still until the test is complete.' },
+      { image: 'assets/protocols/DJ_01.jpg', visual: 'box', title: 'Prepare on the box', description: 'Set the correct box height. Stand at the front edge with hands on hips and the plates clear in front of you.' },
+      { image: 'assets/protocols/DJ_02.jpg', visual: 'drop', title: 'Step off the box', description: 'Step forward and allow gravity to bring you down. Do not jump upward or deliberately push away from the box.' },
+      { image: 'assets/protocols/DJ_03.jpg', visual: 'land', title: 'Make the first contact', description: 'Land with one foot on each plate and absorb only enough to reverse the movement. Keep the contact symmetrical.' },
+      { image: 'assets/protocols/DJ_04.jpg', visual: 'rebound', title: 'Rebound immediately', description: 'Jump vertically as quickly and as high as possible. Aim for minimal ground-contact time without sacrificing height.' },
+      { image: 'assets/protocols/DJ_05.jpg', visual: 'land', title: 'Land after the rebound', description: 'Return with one foot on each plate and control the final landing inside the measurement area.' },
+      { image: 'assets/protocols/DJ_06.jpg', visual: 'still', title: 'Stand still', description: 'Regain an upright position and remain still until the routine confirms that the test is complete.' },
     ],
   },
   {
@@ -51,10 +54,10 @@ const ForcePlateTestProtocols = [
     label: 'Static Balance',
     intro: 'A quiet-standing balance assessment using the selected stance and vision condition.',
     steps: [
-      { visual: 'setup', title: 'Confirm the test condition', description: 'Check the stance, tested leg, eyes-open or eyes-closed condition and test duration before starting.' },
-      { visual: 'balance', title: 'Take the test position', description: 'Place the supporting foot in the prescribed position. Settle your posture without touching external support.' },
+      { image: 'assets/protocols/CMJ_01.jpg', visual: 'setup', title: 'Confirm the test condition', description: 'Check the stance, tested leg, eyes-open or eyes-closed condition and test duration before starting.' },
+      { image: 'assets/protocols/Balance_02.jpg', visual: 'balance', title: 'Take the test position', description: 'Place the supporting foot in the prescribed position. Settle your posture without touching external support.' },
       { visual: 'eyes', title: 'Follow the vision instruction', description: 'Keep the eyes open on the reference point or close them when instructed. Maintain the same head position.' },
-      { visual: 'still', title: 'Remain as still as possible', description: 'Hold the position for the full measurement. Continue until the completion instruction is shown.' },
+      { image: 'assets/protocols/Balance_02.jpg', visual: 'still', title: 'Remain as still as possible', description: 'Hold the position for the full measurement. Continue until the completion instruction is shown.' },
     ],
   },
   {
@@ -74,8 +77,8 @@ const ForcePlateTestProtocols = [
     intro: 'A stable body-mass measurement used by force- and bodyweight-normalized metrics.',
     steps: [
       { visual: 'tare', title: 'Clear and tare the plates', description: 'Make sure both plates are unloaded and stable. Tare the system before the athlete steps on.' },
-      { visual: 'step', title: 'Step onto the plates', description: 'Place one foot on each plate and distribute body weight naturally without touching external support.' },
-      { visual: 'still', title: 'Stand still', description: 'Maintain a relaxed upright posture while the reading stabilizes. Wait for the measurement to be accepted.' },
+      { image: 'assets/protocols/CMJ_01.jpg', visual: 'step', title: 'Step onto the plates', description: 'Place one foot on each plate and distribute body weight naturally without touching external support.' },
+      { image: 'assets/protocols/CMJ_01.jpg', visual: 'still', title: 'Stand still', description: 'Maintain a relaxed upright posture while the reading stabilizes. Wait for the measurement to be accepted.' },
     ],
   },
 ];
@@ -1593,7 +1596,13 @@ async function clearLocalSessionCache() {
     '',
     'Exported package files and Librarian data are untouched.',
   ].join('\n');
-  if (!window.confirm(message)) return;
+  const confirmed = await window.PerformanceHubDialog.confirm({
+    title: 'Clear local cache?',
+    message: message.replace('Clear local ForcePlate session cache?\n\n', ''),
+    confirmLabel: 'CLEAR CACHE',
+    destructive: true,
+  });
+  if (!confirmed) return;
 
   stopMeasurementStatusPolling();
   await stopRealtimeStream('');
@@ -2765,16 +2774,21 @@ function setProtocolDiscipline(disciplineId) {
   controls.protocolDisciplineList.querySelectorAll('[data-protocol-discipline]').forEach((button) => {
     button.classList.toggle('active', button.dataset.protocolDiscipline === protocol.id);
   });
-  controls.protocolSteps.innerHTML = protocol.steps.map((step, index) => `
-    <article class="protocolStep">
-      <div class="protocolStepNumber">${String(index + 1).padStart(2, '0')}</div>
-      <div class="protocolStepImage">${protocolIllustration(step.visual, step.title)}</div>
-      <div class="protocolStepDescription">
-        <small>Step ${index + 1}</small>
-        <h3>${escapeHtml(step.title)}</h3>
-        <p>${escapeHtml(step.description)}</p>
-      </div>
-    </article>`).join('');
+  controls.protocolSteps.innerHTML = protocol.steps.map((step, index) => {
+    const visual = step.image
+      ? `<img src="${escapeHtml(step.image)}" alt="${escapeHtml(step.title)}" loading="lazy" decoding="async">`
+      : protocolIllustration(step.visual, step.title);
+    return `
+      <article class="protocolStep">
+        <div class="protocolStepNumber">${String(index + 1).padStart(2, '0')}</div>
+        <div class="protocolStepImage${step.image ? ' hasPhoto' : ''}">${visual}</div>
+        <div class="protocolStepDescription">
+          <small>Step ${index + 1}</small>
+          <h3>${escapeHtml(step.title)}</h3>
+          <p>${escapeHtml(step.description)}</p>
+        </div>
+      </article>`;
+  }).join('');
   controls.protocolSteps.scrollTop = 0;
 }
 
@@ -2838,12 +2852,23 @@ function rowsToCsv(rows) {
 async function exportCurrentCsv() {
   if (!state.rows.length) {
     setStatus('No trace to export');
+    await window.PerformanceHubDialog.alert({
+      title: 'Nothing to export',
+      message: 'Load or select a trace in Analyze first.',
+    });
     return;
   }
   const blob = new Blob([rowsToCsv(state.rows)], { type: 'text/csv;charset=utf-8' });
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const exportOutcome = await downloadBlob(blob, `forceplate_trace_${timestamp}.csv`);
-  if (exportOutcome !== 'folder_required') setStatus('CSV exported');
+  const fileName = `forceplate_trace_${timestamp}.csv`;
+  const exportOutcome = await downloadBlob(blob, fileName);
+  if (exportOutcome !== 'folder_required') {
+    setStatus(`CSV exported: ${fileName}`);
+    await window.PerformanceHubDialog.alert({
+      title: 'CSV Saved',
+      message: `${fileName}\n\nPortable Results folder`,
+    });
+  }
 }
 
 function savedPresets() {
@@ -10563,7 +10588,13 @@ function updateHoverCursor(event) {
 }
 
   controls.exportCsv.addEventListener('click', () => {
-    exportCurrentCsv().catch((error) => setStatus(`CSV export error: ${error.message}`));
+    exportCurrentCsv().catch((error) => {
+      setStatus(`CSV export error: ${error.message}`);
+      window.PerformanceHubDialog.alert({
+        title: 'CSV export failed',
+        message: error.message,
+      });
+    });
   });
 controls.appTabMeasure.addEventListener('click', () => setAppTab('measure'));
 controls.appTabAnalyze.addEventListener('click', () => setAppTab('analyze'));
@@ -10761,7 +10792,10 @@ controls.sessionStop.addEventListener('click', async () => {
   if (state.session.results.length) {
     const exportOutcome = await exportCurrentSessionPackage();
     if (ForcePlateNativeResults && exportOutcome === 'saved') {
-      window.alert('Session Saved');
+      await window.PerformanceHubDialog.alert({
+        title: 'Session Saved',
+        message: 'The session package is available in the portable Results folder.',
+      });
     }
   } else {
     setStatus('Session stopped');

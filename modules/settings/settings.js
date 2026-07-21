@@ -182,14 +182,28 @@
       return;
     }
     const button = event.target.closest("[data-delete-athlete]");
-    if (!button || !window.confirm(`Delete athlete ${button.dataset.deleteAthlete}?`)) return;
+    if (!button) return;
+    const confirmed = await window.PerformanceHubDialog.confirm({
+      title: 'Delete athlete?',
+      message: button.dataset.deleteAthlete,
+      confirmLabel: 'DELETE',
+      destructive: true,
+    });
+    if (!confirmed) return;
     try { await request(`/api/athletes/${button.dataset.deleteAthlete}`, { method: "DELETE" }); await refresh(); }
     catch (error) { setConnection("Athlete delete failed", false, error.message); }
   });
 
   byId("categoryList").addEventListener("click", async event => {
     const button = event.target.closest("[data-delete-category]");
-    if (!button || !window.confirm(`Delete category ${button.dataset.deleteCategory}? Athletes are not deleted.`)) return;
+    if (!button) return;
+    const confirmed = await window.PerformanceHubDialog.confirm({
+      title: 'Delete category?',
+      message: `${button.dataset.deleteCategory}\n\nAthletes are not deleted.`,
+      confirmLabel: 'DELETE',
+      destructive: true,
+    });
+    if (!confirmed) return;
     try { await request(`/api/categories/${encodeURIComponent(button.dataset.deleteCategory)}`, { method: "DELETE" }); await refresh(); }
     catch (error) { setConnection("Category delete failed", false, error.message); }
   });

@@ -107,3 +107,110 @@ select {
 .jb-muted {
   color: var(--jb-color-text-muted);
 }
+
+.phDialogHost[hidden] {
+  display: none;
+}
+
+.phDialogHost {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: grid;
+  place-items: center;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+.phDialogBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 5, 5, 0.7);
+  backdrop-filter: blur(3px);
+}
+
+.phDialogSurface {
+  position: relative;
+  width: min(440px, calc(100vw - 36px));
+  max-height: min(620px, calc(100vh - 36px));
+  overflow: auto;
+  border: 1px solid var(--jb-color-line);
+  border-radius: var(--jb-radius-card);
+  background: var(--jb-color-bg-panel-2);
+  color: var(--jb-color-text);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.62);
+}
+
+.phDialogAccent {
+  height: 4px;
+  background: var(--jb-module-primary);
+}
+
+.phDialogHeader {
+  padding: 22px 24px 10px;
+}
+
+.phDialogHeader small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--jb-module-primary);
+  font-family: var(--jb-font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.phDialogHeader h2 {
+  margin: 0;
+  color: var(--jb-color-text);
+  font-family: var(--jb-font-display);
+  font-size: 28px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  letter-spacing: var(--jb-font-display-spacing);
+  line-height: 1.05;
+}
+
+.phDialogMessage {
+  padding: 6px 24px 24px;
+  color: var(--jb-color-text-muted);
+  font-family: var(--jb-font-ui);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.phDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--jb-color-line-soft);
+  background: var(--jb-color-bg-panel-3);
+}
+
+.phDialogActions button {
+  min-width: 112px;
+}
+
+.phDialogActions button.danger {
+  border-color: #c65042;
+  background: #8d2f26;
+  color: #fff6e4;
+}
+
+@media (max-width: 600px) {
+  .phDialogSurface {
+    width: min(390px, calc(100vw - 24px));
+  }
+
+  .phDialogHeader {
+    padding: 18px 18px 8px;
+  }
+
+  .phDialogMessage {
+    padding: 6px 18px 20px;
+  }
+
+  .phDialogActions button {
+    min-width: 96px;
+  }
+}
