@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../core/theme/tokens.css">
   <link rel="stylesheet" href="../../core/ui/ui.css">
   <link rel="stylesheet" href="../../core/ui/workspace.css">
+  <link rel="stylesheet" href="settings.css?v=20260721-athlete-photo1">
 </head>
 <body data-module="settings">
 <main class="ph-app">
@@ -32,8 +33,41 @@
           <input id="athleteDisplayName" placeholder="Display name">
           <select id="athleteCategory"><option value="">No category</option></select>
           <input id="athleteJersey" placeholder="Jersey #">
+          <select id="athletePosition">
+            <option value="">Position — not set</option>
+            <option value="LD">LD — Defense</option>
+            <option value="RD">RD — Defense</option>
+            <option value="LW">LW — Forward</option>
+            <option value="RW">RW — Forward</option>
+            <option value="C">C — Forward</option>
+            <option value="G">G — Goalie</option>
+          </select>
+          <select id="athleteShoots">
+            <option value="">Shoots — not set</option>
+            <option value="Left">Shoots — Left</option>
+            <option value="Right">Shoots — Right</option>
+          </select>
+          <select id="athleteSex">
+            <option value="male" selected>Male</option>
+            <option value="female">Female</option>
+          </select>
+          <input id="athleteDateOfBirth" type="date" title="Date of birth">
+          <input id="athleteHeight" type="number" min="50" max="250" step="0.1" placeholder="Height cm">
           <input id="athleteBodyMass" type="number" min="10" max="300" step="0.1" placeholder="Body mass kg">
-          <input id="athletePhotoId" placeholder="Photo ID">
+          <input id="athletePhotoId" type="hidden">
+          <section class="ph-athlete-photo-editor">
+            <img id="athletePhotoPreview" alt="Athlete photo preview">
+            <div class="ph-athlete-photo-copy">
+              <strong>Athlete Photo</strong>
+              <small id="athletePhotoStatus">No custom photo</small>
+              <div class="ph-athlete-photo-actions">
+                <button id="athleteChoosePhoto" type="button">CHOOSE PHOTO</button>
+                <button id="athleteUseCamera" type="button">USE CAMERA</button>
+                <button id="athleteRemovePhoto" type="button">REMOVE</button>
+              </div>
+            </div>
+            <input id="athletePhotoFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          </section>
           <button id="athleteSubmit" class="active" type="submit">ADD ATHLETE</button>
           <button id="athleteCancelEdit" class="hidden" type="button">CANCEL</button>
         </form>
@@ -44,7 +78,7 @@
           <button id="refreshRoster" type="button">Refresh</button>
         </div>
         <div class="ph-panel-body">
-          <table class="ph-table"><thead><tr><th>ID</th><th>Display</th><th>Name</th><th>Category</th><th>Jersey</th><th>Body mass</th><th></th></tr></thead><tbody id="athleteTableBody"></tbody></table>
+          <table class="ph-table"><thead><tr><th>ID</th><th>Display</th><th>Name</th><th>Category</th><th>Jersey</th><th>Profile</th><th>Body mass</th><th></th></tr></thead><tbody id="athleteTableBody"></tbody></table>
           <div id="rosterEmpty" class="ph-empty">Connect to Librarian to load athletes.</div>
         </div>
       </article>
@@ -88,9 +122,57 @@
     </section>
   </section>
 </main>
+
+<section id="photoCropModal" class="ph-photo-modal hidden" role="dialog" aria-modal="true" aria-labelledby="photoCropTitle">
+  <div class="ph-photo-dialog">
+    <header>
+      <div><small>ATHLETE PHOTO</small><h2 id="photoCropTitle">Align &amp; Crop</h2></div>
+      <button id="photoCropClose" type="button" aria-label="Close photo editor">×</button>
+    </header>
+    <div class="ph-photo-dialog-body">
+      <div class="ph-photo-canvas-wrap">
+        <canvas id="photoCropCanvas" width="512" height="512"></canvas>
+        <small id="photoDetectionStatus">Preparing photo…</small>
+      </div>
+      <div class="ph-photo-controls">
+        <label>Horizontal Position <output id="photoCropXValue"></output><input id="photoCropX" type="range" min="0" max="100" step="0.1"></label>
+        <label>Vertical Position <output id="photoCropYValue"></output><input id="photoCropY" type="range" min="0" max="100" step="0.1"></label>
+        <label>Zoom <output id="photoCropZoomValue"></output><input id="photoCropZoom" type="range" min="50" max="300" step="1" value="100"></label>
+        <label>Rotation <output id="photoCropRotationValue"></output><input id="photoCropRotation" type="range" min="-30" max="30" step="0.1" value="0"></label>
+        <div class="ph-photo-tip">Drag the preview to reposition. Use the mouse wheel to zoom.</div>
+        <button id="photoCropReset" type="button">RESET AUTO ALIGNMENT</button>
+      </div>
+    </div>
+    <footer>
+      <button id="photoCropCancel" type="button">CANCEL</button>
+      <button id="photoCropApply" class="active" type="button">USE PHOTO</button>
+    </footer>
+  </div>
+</section>
+
+<section id="photoCameraModal" class="ph-photo-modal hidden" role="dialog" aria-modal="true" aria-labelledby="photoCameraTitle">
+  <div class="ph-photo-dialog ph-camera-dialog">
+    <header>
+      <div><small>ATHLETE PHOTO</small><h2 id="photoCameraTitle">Camera</h2></div>
+      <button id="photoCameraClose" type="button" aria-label="Close camera">×</button>
+    </header>
+    <div class="ph-camera-body">
+      <video id="photoCameraVideo" autoplay playsinline muted></video>
+      <div class="ph-camera-tools">
+        <label>Camera<select id="photoCameraSelect"></select></label>
+        <small id="photoCameraStatus">Requesting camera…</small>
+      </div>
+    </div>
+    <footer>
+      <button id="photoCameraCancel" type="button">CANCEL</button>
+      <button id="photoCameraCapture" class="active" type="button">CAPTURE</button>
+    </footer>
+  </div>
+</section>
+
 <script src="../../core/config/config.js"></script>
 <script src="../../core/ui/workspace.js"></script>
 <script src="../../core/ui/dialog.js"></script>
-<script src="settings.js?v=20260721-dialog1"></script>
+<script src="settings.js?v=20260721-athlete-photo3"></script>
 </body>
 </html>

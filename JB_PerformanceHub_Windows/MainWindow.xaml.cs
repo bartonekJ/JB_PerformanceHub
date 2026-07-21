@@ -96,6 +96,7 @@ public partial class MainWindow : Window
             """);
 
         Browser.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+        Browser.CoreWebView2.PermissionRequested += OnPermissionRequested;
         Browser.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
         Browser.CoreWebView2.NavigationStarting += OnNavigationStarting;
         StartupStatus.Text = "Loading PerformanceHub...";
@@ -147,6 +148,15 @@ public partial class MainWindow : Window
         catch (Exception error)
         {
             await LogAsync($"Native message failed: {error}");
+        }
+    }
+
+    private void OnPermissionRequested(object? sender, CoreWebView2PermissionRequestedEventArgs e)
+    {
+        if (e.PermissionKind == CoreWebView2PermissionKind.Camera)
+        {
+            e.State = CoreWebView2PermissionState.Allow;
+            e.SavesInProfile = false;
         }
     }
 

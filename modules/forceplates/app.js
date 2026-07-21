@@ -126,6 +126,7 @@ const state = {
   activeTraceId: null,
   activeResultId: null,
   settingsTab: 'traces',
+  collapsedMetricGroups: new Set(),
   cursorIndex: -1,
   overlays: {
     velocity: false,
@@ -739,7 +740,7 @@ function syncCustomSelects() {
 function applyMeasureLayout(layout = storageRead(MeasureLayoutStorageKey, {})) {
   const leaderboardWidth = clamp(Number(layout.leaderboardWidth) || 360, 240, 720);
   const sessionPanelWidth = clamp(Number(layout.sessionPanelWidth) || 480, 360, 720);
-  const currentPanelHeight = clamp(Number(layout.currentPanelHeight) || 230, 150, 520);
+  const currentPanelHeight = clamp(Number(layout.currentPanelHeight) || 390, 380, 520);
   controls.measureView.style.setProperty('--leaderboard-panel-width', `${leaderboardWidth}px`);
   controls.measureView.style.setProperty('--session-panel-width', `${sessionPanelWidth}px`);
   controls.measureView.style.setProperty('--current-panel-height', `${currentPanelHeight}px`);
@@ -750,7 +751,7 @@ function readMeasureLayout() {
   return {
     leaderboardWidth: Number.parseFloat(style.getPropertyValue('--leaderboard-panel-width')) || 360,
     sessionPanelWidth: Number.parseFloat(style.getPropertyValue('--session-panel-width')) || 480,
-    currentPanelHeight: Number.parseFloat(style.getPropertyValue('--current-panel-height')) || 230,
+    currentPanelHeight: Number.parseFloat(style.getPropertyValue('--current-panel-height')) || 390,
   };
 }
 
@@ -1264,6 +1265,7 @@ function syncCurrentAthleteFromControls(athleteId = controls.sessionAthlete.valu
   state.session.currentAthleteId = Number(athleteId) || 0;
   window.JBForcePlateSessionStore.writeStoredState(state.session);
   renderSessionControls();
+  renderSessionStats();
 }
 
 function applySessionCategory(category) {
@@ -1278,6 +1280,7 @@ function applySessionCategory(category) {
   state.session.session.updatedAt = Date.now();
   window.JBForcePlateSessionStore.writeStoredState(state.session);
   renderSessionControls();
+  renderSessionStats();
   updateCacheStatus();
 }
 
@@ -2267,13 +2270,23 @@ function renderSessionStats() {
   const metrics = currentPreviewMetrics();
   const lastResult = state.session.results.at(-1);
   const athleteRecord = window.JBForcePlateSessionStore.athleteById(state.session);
-  const athlete = lastResult?.athleteName ||
-      (athleteRecord ? window.JBForcePlateModels.athleteDisplayName(athleteRecord) : '') ||
+  const matchingLastResult = lastResult && resultMatchesAthlete(lastResult, athleteRecord)
+    ? lastResult
+    : null;
+  const athlete = (athleteRecord ? window.JBForcePlateModels.athleteDisplayName(athleteRecord) : '') ||
+      matchingLastResult?.athleteName ||
       'No athlete';
-  const jersey = athleteRecord?.number || athleteRecord?.jersey || '';
-  const category = lastResult?.category || athleteRecord?.category || state.session.session.category || '';
-  const lastDiscipline = lastResult?.disciplineDefinition?.discipline || lastResult?.discipline;
-  const balanceValues = lastDiscipline === 'eyes_closed_balance' ? lastResult?.metrics?.values : null;
+  const category = athleteRecord?.category || matchingLastResult?.category || state.session.session.category || '';
+  const athleteCardResult = {
+    ...(matchingLastResult || {}),
+    athleteId: Number(athleteRecord?.athleteId || state.session.currentAthleteId || 0),
+    athleteName: athlete,
+    athleteSnapshot: athleteRecord ? { ...athleteRecord } : null,
+    bodyMassSnapshot: currentAthleteMassSnapshot(),
+    category,
+  };
+  const lastDiscipline = matchingLastResult?.disciplineDefinition?.discipline || matchingLastResult?.discipline;
+  const balanceValues = lastDiscipline === 'eyes_closed_balance' ? matchingLastResult?.metrics?.values : null;
   if (balanceValues) {
     const paired = balanceValues.visionMode === 'paired' && balanceValues.open && balanceValues.closed;
     const stats = paired
@@ -2300,14 +2313,7 @@ function renderSessionStats() {
     controls.sessionStats.innerHTML = `
       <h3>Current Measurement</h3>
       <div class="sessionCurrentGrid">
-        <div class="sessionAthleteCard">
-          <div class="sessionAthletePortrait" aria-hidden="true"></div>
-          <div>
-            <span>Athlete</span>
-            <strong>${escapeHtml(athlete)}</strong>
-            <small>${escapeHtml([jersey ? `#${jersey}` : '', category].filter(Boolean).join('  '))}</small>
-          </div>
-        </div>
+        ${renderAthleteCard(athleteCardResult, { context: 'measure' })}
         <div class="sessionStat sessionStatPrimary">
           <span>${paired ? 'EC Total Excursion' : 'Total Excursion'}</span>
           <strong>${Number(paired ? balanceValues.closed.totalExcursionMm : balanceValues.totalExcursionMm || 0).toFixed(1)} mm</strong>
@@ -2332,14 +2338,7 @@ function renderSessionStats() {
   controls.sessionStats.innerHTML = `
     <h3>Current Measurement</h3>
     <div class="sessionCurrentGrid">
-      <div class="sessionAthleteCard">
-        <div class="sessionAthletePortrait" aria-hidden="true"></div>
-        <div>
-          <span>Athlete</span>
-          <strong>${escapeHtml(athlete)}</strong>
-          <small>${escapeHtml([jersey ? `#${jersey}` : '', category].filter(Boolean).join('  '))}</small>
-        </div>
-      </div>
+      ${renderAthleteCard(athleteCardResult, { context: 'measure' })}
       <div class="sessionStat sessionStatPrimary">
         <span>${escapeHtml(primary[0])}</span>
         <strong>${escapeHtml(primary[1])}</strong>
@@ -2486,6 +2485,7 @@ async function loadResultsSources() {
     ...state.results.folderPackages,
   ];
   renderResultsOptions();
+  if (state.analyzeResult) renderMetrics();
 }
 
 async function nativeResultsFiles({ requestFolder = false, pendingAction = '', pick = false } = {}) {
@@ -3828,16 +3828,49 @@ function renderMetrics() {
   });
   if (currentGroup.title || currentGroup.metrics.length) groups.push(currentGroup);
 
+  const jumpHeightGroup = groups.find((group) => metricRegistryKey(group.title) === 'IMPULSE MOMENTUM HEIGHT');
+  const appliedHeightGroup = groups.find((group) => metricRegistryKey(group.title) === 'APPLIED HEIGHT');
+  const primaryGroup = groups.find((group) => metricRegistryKey(group.title) === 'PRIMARY');
+  if (jumpHeightGroup) {
+    jumpHeightGroup.title = 'Jump Height';
+    if (appliedHeightGroup) {
+      jumpHeightGroup.metrics.push(...appliedHeightGroup.metrics);
+      groups.splice(groups.indexOf(appliedHeightGroup), 1);
+    }
+    if (primaryGroup) {
+      const heelHeightMetrics = primaryGroup.metrics.filter((metric) => (
+        metric.some((item, itemIndex) => itemIndex % 2 === 0 && metricRegistryKey(item) === 'HEEL HEIGHT')
+      ));
+      primaryGroup.metrics = primaryGroup.metrics.filter((metric) => !heelHeightMetrics.includes(metric));
+      jumpHeightGroup.metrics.push(...heelHeightMetrics);
+    }
+  }
+  if (primaryGroup) primaryGroup.title = 'Primary Metrics';
+
   metricsEl.innerHTML = `
-    ${renderAnalyzeIdentityCards(selectedResult)}
-    ${groups.map((group) => `
-    <section class="metricGroup">
-      ${group.title ? `<h3>${escapeHtml(group.title)}</h3>` : ''}
-      <div class="metricGroupGrid">
-        ${group.metrics.map(renderMetric).join('')}
-      </div>
+    <aside class="analyzeIdentityRail">
+      ${renderAnalyzeIdentityCards(selectedResult)}
+    </aside>
+    <section class="metricGroupsViewport" aria-label="Metrics">
+      ${groups.map((group, index) => {
+        const title = group.title || `Metrics ${index + 1}`;
+        const entries = group.metrics
+          .flatMap((metric, metricIndex) => metricEntries(metric, title, metricIndex * 10))
+          .sort((entryA, entryB) => entryA.order - entryB.order || entryA.sourceOrder - entryB.sourceOrder);
+        const count = entries.length;
+        const open = !state.collapsedMetricGroups.has(title);
+        return `
+          <details class="metricGroup" data-metric-group-key="${escapeHtml(title)}"${open ? ' open' : ''}>
+            <summary>
+              <strong class="metricGroupTitle">${escapeHtml(title)}</strong>
+              <small>${count}</small>
+            </summary>
+            <div class="metricGroupBody">
+              ${renderMetricGroupBody(entries)}
+            </div>
+          </details>`;
+      }).join('')}
     </section>
-  `).join('')}
   `;
   renderLandmarkDebug();
 }
@@ -3850,29 +3883,285 @@ function analyzeDisciplineLabel(result) {
     || '';
 }
 
-function renderAnalyzeIdentityCards(result) {
-  const athlete = result?.athleteSnapshot || null;
-  const athleteName = result?.athleteName
-    || (athlete ? window.JBForcePlateModels.athleteDisplayName(athlete) : '')
-    || 'No athlete';
-  const jersey = athlete?.number || athlete?.jersey || '';
-  const category = result?.category || athlete?.category || state.session.session.category || '';
-  const discipline = analyzeDisciplineLabel(result);
-  const balanceDetail = balanceResultDescriptor(result);
+const SupplementalAthleteRecordDefinitions = new Map([
+  ['10_5', {
+    label: '10-5',
+    order: 60,
+    direction: 'max',
+    valuePaths: ['rsi'],
+    metricLabels: ['RSI'],
+    decimals: 2,
+    unit: '',
+  }],
+  ['repeated_hop_10_5', {
+    label: '10-5',
+    order: 60,
+    direction: 'max',
+    valuePaths: ['rsi'],
+    metricLabels: ['RSI'],
+    decimals: 2,
+    unit: '',
+  }],
+]);
+
+function resultDisciplineId(result) {
+  return result?.disciplineDefinition?.discipline || result?.discipline || '';
+}
+
+function athleteProfileForResult(result) {
+  const snapshot = result?.athleteSnapshot || {};
+  const athleteId = Number(result?.athleteId || snapshot.athleteId || 0);
+  const rosterAthlete = (state.session.athletes || []).find((athlete) => (
+    athleteId && Number(athlete.athleteId) === athleteId
+  ));
+  return {
+    ...snapshot,
+    ...(rosterAthlete || {}),
+    athleteId,
+    bodyMassKg: Number(rosterAthlete?.bodyMassKg)
+      || Number(result?.bodyMassSnapshot?.bodyMassKg)
+      || Number(snapshot.bodyMassKg)
+      || 0,
+  };
+}
+
+function athleteProfileValue(athlete, keys) {
+  for (const key of keys) {
+    const value = athlete?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function athleteDateOfBirth(athlete) {
+  const raw = athleteProfileValue(athlete, ['dateOfBirth', 'birthDate', 'dob']);
+  if (!raw) return '---';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return String(raw);
+  return date.toLocaleDateString();
+}
+
+function athleteAge(athlete, today = new Date()) {
+  const raw = String(athleteProfileValue(athlete, ['dateOfBirth', 'birthDate', 'dob']) || '').trim();
+  if (!raw) return '';
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const birthDate = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(raw);
+  if (Number.isNaN(birthDate.getTime()) || birthDate > today) return '';
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const birthdayPending = today.getMonth() < birthDate.getMonth()
+    || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate());
+  if (birthdayPending) age -= 1;
+  return age >= 0 && age <= 130 ? age : '';
+}
+
+function athleteHeightCm(athlete) {
+  const raw = Number(athleteProfileValue(athlete, ['heightCm', 'height']));
+  if (!finite(raw) || raw <= 0) return 0;
+  return raw <= 3 ? raw * 100 : raw;
+}
+
+function athleteBmi(athlete) {
+  const heightCm = athleteHeightCm(athlete);
+  const bodyMassKg = Number(athlete?.bodyMassKg) || 0;
+  if (heightCm <= 0 || bodyMassKg <= 0) return '';
+  const heightM = heightCm / 100;
+  const bmi = bodyMassKg / (heightM * heightM);
+  return finite(bmi) && bmi > 0 && bmi < 100 ? bmi.toFixed(1) : '';
+}
+
+function athletePortraitSource(athlete) {
+  const photoId = String(athleteProfileValue(athlete, ['photoId']) || '').trim();
+  if (/^[a-f0-9]{24}$/.test(photoId)) {
+    const librarianApi = String(window.JBPerformanceHubConfig?.get('librarianApi') || '').replace(/\/$/, '');
+    if (librarianApi) return `${librarianApi}/api/photos/${photoId}/avatar-512.webp`;
+  }
+  return athleteGenericPortraitSource(athlete);
+}
+
+function athleteGenericPortraitSource(athlete) {
+  const sex = String(athleteProfileValue(athlete, ['sex', 'gender']) || '').trim().toLowerCase();
+  if (['female', 'f', 'woman', 'girl', 'žena', 'zena'].includes(sex)) {
+    return 'assets/athletes/AF_Portrait.jpg';
+  }
+  return 'assets/athletes/AM_Portrait.jpg';
+}
+
+function athleteIdentityMatches(result, athlete, athleteName) {
+  const athleteId = Number(athlete?.athleteId || 0);
+  const resultAthleteId = Number(result?.athleteId || result?.athleteSnapshot?.athleteId || 0);
+  if (athleteId && resultAthleteId) return athleteId === resultAthleteId;
+  return String(result?.athleteName || '').trim().toLowerCase() === String(athleteName || '').trim().toLowerCase();
+}
+
+function knownResultsForAthlete(athlete, athleteName) {
+  const candidates = [
+    ...(state.results.packages || []).flatMap((item) => item.package?.results || []),
+    ...(state.resultLibrary || []).map((item) => item.result),
+    ...(state.session.results || []),
+  ];
+  const unique = new Map();
+  candidates.forEach((result, index) => {
+    if (!result || !athleteIdentityMatches(result, athlete, athleteName)) return;
+    const key = result.resultId || result.traceHash || `${result.measuredAt || 0}:${resultDisciplineId(result)}:${index}`;
+    if (!unique.has(key)) unique.set(key, result);
+  });
+  return [...unique.values()];
+}
+
+function valueAtPath(source, path) {
+  return String(path || '').split('.').reduce((value, key) => value?.[key], source);
+}
+
+function metricNumberForLabels(result, labels = []) {
+  const wanted = new Set(labels.map((label) => metricRegistryKey(label)));
+  const rows = Array.isArray(result?.metrics?.metrics) ? result.metrics.metrics : [];
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    for (let index = 0; index < row.length; index += 2) {
+      if (!wanted.has(metricRegistryKey(row[index]))) continue;
+      const parsed = Number.parseFloat(String(row[index + 1] ?? '').replace(',', '.'));
+      if (finite(parsed)) return parsed;
+    }
+  }
+  return NaN;
+}
+
+function recordDefinitionForDiscipline(disciplineId) {
+  const normalizedId = disciplineId === 'balance' ? 'eyes_closed_balance' : disciplineId;
+  const definition = window.JBForcePlateModels.disciplineDefinition(normalizedId);
+  if (definition?.id === normalizedId && definition.recordMetric) return definition.recordMetric;
+  return SupplementalAthleteRecordDefinitions.get(normalizedId) || null;
+}
+
+function recordValueForResult(result, definition) {
+  const settings = result?.disciplineSettings || result?.disciplineDefinition?.settings || {};
+  const values = result?.metrics?.values || {};
+  if (definition.settingKey) {
+    const value = Number(settings[definition.settingKey]);
+    if (finite(value)) return value;
+  }
+  for (const path of definition.valuePaths || []) {
+    const value = Number(valueAtPath(values, path));
+    if (finite(value)) return value;
+  }
+  return metricNumberForLabels(result, definition.metricLabels);
+}
+
+function athleteDisciplineRecords(athlete, athleteName) {
+  const records = new Map();
+  knownResultsForAthlete(athlete, athleteName).forEach((result) => {
+    const disciplineId = resultDisciplineId(result);
+    const definition = recordDefinitionForDiscipline(disciplineId);
+    if (!definition) return;
+    const value = recordValueForResult(result, definition);
+    if (!finite(value) || value <= 0) return;
+    const current = records.get(disciplineId);
+    const better = !current
+      || (definition.direction === 'min' ? value < current.value : value > current.value);
+    if (better) records.set(disciplineId, { disciplineId, definition, value });
+  });
+  return [...records.values()].sort((recordA, recordB) => (
+    (recordA.definition.order ?? 999) - (recordB.definition.order ?? 999)
+  )).map((record) => ({
+    label: record.definition.label,
+    value: `${record.value.toFixed(record.definition.decimals ?? 1)}${record.definition.unit ? ` ${record.definition.unit}` : ''}`,
+  })).slice(0, 10);
+}
+
+function renderAthleteField(label, value, unit = '') {
+  const visibleValue = value !== undefined && value !== null && String(value).trim() !== '' ? String(value) : '---';
   return `
-    <section class="analyzeDisciplineCard">
+    <div class="athleteProfileField">
+      <span>${escapeHtml(label)}</span>
+      <i aria-hidden="true"></i>
+      <strong>${escapeHtml(visibleValue)}${unit ? ` <small>${escapeHtml(unit)}</small>` : ''}</strong>
+    </div>`;
+}
+
+function renderAthleteCard(result, { context = 'analyze' } = {}) {
+  const athlete = athleteProfileForResult(result);
+  const athleteName = result?.athleteName
+    || window.JBForcePlateModels.athleteDisplayName(athlete)
+    || 'No athlete';
+  const jersey = athleteProfileValue(athlete, ['number', 'jersey', 'jerseyNumber']);
+  const position = athleteProfileValue(athlete, ['position']);
+  const shoots = athleteProfileValue(athlete, ['shoots', 'shootingSide', 'dominantHand', 'handedness']);
+  const heightCm = athleteHeightCm(athlete);
+  const bodyMassKg = Number(athlete.bodyMassKg) || 0;
+  const records = athleteDisciplineRecords(athlete, athleteName);
+  const recordSlots = [...records, ...Array.from({ length: Math.max(0, 10 - records.length) }, () => null)];
+  const contextClass = context === 'measure' ? 'measureAthleteCard' : 'analyzeAthleteCard';
+  const portraitSource = athletePortraitSource(athlete);
+  const fallbackPortraitSource = athleteGenericPortraitSource(athlete);
+  return `
+    <section class="athleteProfileCard ${contextClass}" data-athlete-card-context="${escapeHtml(context)}">
+      <div class="athleteProfileTop">
+        <div class="athleteProfilePortraitFrame">
+          <img class="athleteProfilePortrait" src="${escapeHtml(portraitSource)}" data-fallback-src="${escapeHtml(fallbackPortraitSource)}" onerror="this.onerror=null;this.src=this.dataset.fallbackSrc" alt="${escapeHtml(`${athleteName} portrait`)}">
+        </div>
+        <div class="athleteProfileDetails">
+          <div class="athleteProfileNameLine">
+            <strong class="athleteProfileName">${escapeHtml(athleteName)}</strong>
+            <i aria-hidden="true"></i>
+            <b>${jersey ? `#${escapeHtml(jersey)}` : '---'}</b>
+          </div>
+          ${renderAthleteField('Position', position)}
+          ${renderAthleteField('Shoots', shoots)}
+          ${renderAthleteField('Date of Birth', athleteDateOfBirth(athlete))}
+          ${renderAthleteField('Age', athleteAge(athlete))}
+          ${renderAthleteField('Height', heightCm ? heightCm.toFixed(heightCm % 1 ? 1 : 0) : '', 'cm')}
+          ${renderAthleteField('Weight', bodyMassKg ? bodyMassKg.toFixed(1) : '', 'kg')}
+          ${renderAthleteField('BMI', athleteBmi(athlete))}
+        </div>
+      </div>
+      <section class="athleteRecords">
+        <header><strong>Records</strong><span aria-hidden="true"></span></header>
+        <div class="athleteRecordGrid">
+          ${recordSlots.map((record) => record ? `
+            <div class="athleteRecordItem">
+              <span>${escapeHtml(record.label)}</span>
+              <i aria-hidden="true"></i>
+              <strong>${escapeHtml(record.value)}</strong>
+            </div>` : '<div class="athleteRecordItem athleteRecordPlaceholder" aria-hidden="true"></div>').join('')}
+        </div>
+      </section>
+    </section>`;
+}
+
+function disciplineContextDetail(result) {
+  const disciplineId = resultDisciplineId(result);
+  if (disciplineId === 'eyes_closed_balance') return { text: balanceResultDescriptor(result) };
+  if (disciplineId === 'drop_jump') {
+    const settings = result?.disciplineSettings || result?.disciplineDefinition?.settings || {};
+    const boxHeightCm = Number(settings.boxHeightCm);
+    return { label: 'Box Height', value: finite(boxHeightCm) && boxHeightCm > 0 ? boxHeightCm.toFixed(boxHeightCm % 1 ? 1 : 0) : '---', unit: 'cm' };
+  }
+  return null;
+}
+
+function renderDisciplineContext(result) {
+  const discipline = analyzeDisciplineLabel(result);
+  const detail = disciplineContextDetail(result);
+  return `
+    <section class="analyzeDisciplineCard disciplineContextCard">
       <span>Discipline</span>
       <strong>${escapeHtml(discipline || '-')}</strong>
-      ${balanceDetail ? `<small>${escapeHtml(balanceDetail)}</small>` : ''}
-    </section>
-    <section class="sessionAthleteCard analyzeAthleteCard">
-      <div class="sessionAthletePortrait" aria-hidden="true"></div>
-      <div>
-        <span>Athlete</span>
-        <strong>${escapeHtml(athleteName)}</strong>
-        <small>${escapeHtml([jersey ? `#${jersey}` : '', category].filter(Boolean).join('  '))}</small>
-      </div>
-    </section>
+      ${detail?.text ? `<small>${escapeHtml(detail.text)}</small>` : ''}
+      ${detail?.label ? `
+        <div class="disciplineContextParameter">
+          <span>${escapeHtml(detail.label)}</span>
+          <i aria-hidden="true"></i>
+          <b>${escapeHtml(detail.value)} <small>${escapeHtml(detail.unit)}</small></b>
+        </div>` : ''}
+    </section>`;
+}
+
+function renderAnalyzeIdentityCards(result) {
+  return `
+    ${renderDisciplineContext(result)}
+    ${renderAthleteCard(result)}
   `;
 }
 
@@ -3882,20 +4171,146 @@ function secondLegTapValueClass(label, value) {
   return taps === 0 ? 'secondLegTapGood' : taps === 1 ? 'secondLegTapWarning' : 'secondLegTapBad';
 }
 
-function renderMetric(metric) {
-  const pairs = [];
+const MetricFamilyOrder = Object.freeze([
+  'Impulse Momentum Height',
+  'Applied Height',
+  'Timing',
+  'Impulse',
+  'Velocity',
+  'Power',
+  'Force',
+  'Symmetry',
+  'Other',
+]);
+
+const MetricPresentationRegistry = new Map([
+  ['*::*::BODYWEIGHT', { hidden: true }],
+
+  ['PRIMARY::*::FLIGHT', { label: 'Flight Time', priority: 'primary', family: 'Timing', composition: 'atomic', order: 10 }],
+  ['PRIMARY::*::CONTACT / RSI', { label: 'Contact Time', priority: 'primary', family: 'Timing', composition: 'atomic', order: 20 }],
+  ['PRIMARY::*::RSI', { label: 'RSI', priority: 'primary', family: 'Timing', composition: 'atomic', order: 30 }],
+  ['PRIMARY::*::IMPULSE', { label: 'Impulse', priority: 'primary', family: 'Impulse', composition: 'atomic', order: 40 }],
+  ['PRIMARY::*::TAKEOFF VELOCITY', { label: 'Takeoff Velocity', priority: 'primary', family: 'Velocity', composition: 'atomic', order: 50 }],
+  ['PRIMARY::TAKEOFF VELOCITY::PROPULSIVE', { label: 'Propulsive Velocity', priority: 'primary', family: 'Velocity', composition: 'atomic', order: 60 }],
+  ['PRIMARY::*::PEAK PROPULSIVE POWER', { label: 'Peak Propulsive Power', priority: 'primary', family: 'Power', composition: 'atomic', order: 80 }],
+  ['PRIMARY::PEAK PROPULSIVE POWER::PEAK REL. PROPULSIVE POWER', { label: 'Peak Rel. Propulsive Power', priority: 'primary', family: 'Power', composition: 'atomic', order: 90 }],
+  ['PRIMARY::*::PEAK FORCE', { label: 'Peak Force', priority: 'primary', family: 'Force', composition: 'atomic', order: 100 }],
+  ['PRIMARY::*::TAKEOFF FORCE', { label: 'Takeoff Force', priority: 'primary', family: 'Force', composition: 'atomic', order: 110 }],
+  ['PRIMARY::*::LANDING FORCE', { label: 'Landing Force', priority: 'primary', family: 'Force', composition: 'atomic', order: 120 }],
+  ['PRIMARY::*::ASYMMETRY', { label: 'Asymmetry', priority: 'primary', family: 'Symmetry', composition: 'atomic', order: 130 }],
+
+  ['JUMP HEIGHT::*::TOV', { label: 'ToV', priority: 'primary', family: 'Impulse Momentum Height', composition: 'atomic', order: 10, defaultTracked: true }],
+  ['JUMP HEIGHT::*::TOV + D', { label: 'ToV + D', priority: 'primary', family: 'Impulse Momentum Height', composition: 'atomic', order: 20 }],
+  ['JUMP HEIGHT::*::DIS', { label: 'DIS', priority: 'primary', family: 'Impulse Momentum Height', composition: 'atomic', order: 30 }],
+  ['JUMP HEIGHT::PROPULSIVE::PROPULSIVE', { label: 'Propulsive Height', priority: 'primary', family: 'Applied Height', composition: 'atomic', order: 40, defaultTracked: true }],
+  ['JUMP HEIGHT::PROPULSIVE::TAKEOFF DISPLACEMENT', { label: 'Takeoff Displacement Height', priority: 'primary', family: 'Applied Height', composition: 'atomic', order: 50 }],
+  ['JUMP HEIGHT::PROPULSIVE::FLIGHT TIME', { label: 'Flight-Time Height', priority: 'primary', family: 'Applied Height', composition: 'atomic', order: 60 }],
+  ['JUMP HEIGHT::*::HEEL HEIGHT', { label: 'Heel Height', priority: 'primary', family: 'Applied Height', composition: 'atomic', order: 70 }],
+  ['DROP JUMP TECHNIQUE::BRAKING IMPULSE::PROPULSIVE', { label: 'Propulsive Impulse', priority: 'secondary', family: 'Impulse', composition: 'atomic' }],
+  ['DROP JUMP TECHNIQUE::PEAK BRAKING POWER::W/BM', { label: 'Peak Rel. Braking Power', priority: 'secondary', family: 'Power', composition: 'atomic' }],
+  ['DROP JUMP TECHNIQUE::PEAK PROPULSIVE POWER::W/BM', { label: 'Peak Rel. Propulsive Power', priority: 'secondary', family: 'Power', composition: 'atomic' }],
+]);
+
+function metricDisplayLabel(label) {
+  const acronyms = new Map([
+    ['ap', 'AP'],
+    ['cop', 'COP'],
+    ['dis', 'DIS'],
+    ['ec', 'EC'],
+    ['eo', 'EO'],
+    ['ml', 'ML'],
+    ['rq', 'RQ'],
+    ['rsi', 'RSI'],
+    ['tov', 'ToV'],
+    ['w', 'W'],
+    ['bm', 'BM'],
+  ]);
+  return String(label).toLowerCase().replace(/[a-z]+/g, (word) => (
+    acronyms.get(word) || `${word.charAt(0).toUpperCase()}${word.slice(1)}`
+  ));
+}
+
+function metricRegistryKey(value) {
+  const normalized = String(value || '*').trim().toUpperCase();
+  return normalized === 'PRIMARY METRICS' ? 'PRIMARY' : normalized;
+}
+
+function metricPresentation(groupTitle, contextLabel, itemLabel) {
+  const group = metricRegistryKey(groupTitle);
+  const context = metricRegistryKey(contextLabel);
+  const label = metricRegistryKey(itemLabel);
+  const metadata = MetricPresentationRegistry.get(`${group}::${context}::${label}`)
+    || MetricPresentationRegistry.get(`${group}::*::${label}`)
+    || MetricPresentationRegistry.get(`*::*::${label}`)
+    || {};
+  return {
+    label: metadata.label || metricDisplayLabel(itemLabel),
+    priority: metadata.priority || (group === 'PRIMARY' ? 'primary' : 'secondary'),
+    family: metadata.family || '',
+    composition: metadata.composition || 'atomic',
+    order: Number.isFinite(metadata.order) ? metadata.order : 1000,
+    defaultTracked: Boolean(metadata.defaultTracked),
+    hidden: Boolean(metadata.hidden),
+  };
+}
+
+function metricEntries(metric, groupTitle, sourceOffset = 0) {
+  const entries = [];
+  const contextLabel = metric[0] || '';
   for (let i = 0; i < metric.length; i += 2) {
-    if (metric[i]) pairs.push([metric[i], metric[i + 1]]);
+    const itemLabel = metric[i];
+    if (!itemLabel) continue;
+    const presentation = metricPresentation(groupTitle, contextLabel, itemLabel);
+    if (presentation.hidden) continue;
+    entries.push({
+      rawLabel: itemLabel,
+      value: metric[i + 1],
+      sourceOrder: sourceOffset + i / 2,
+      ...presentation,
+    });
   }
-  const splitClass = pairs.length > 1 ? ' metricSplit' : '';
-  return `<div class="metric${splitClass}">
-    ${pairs.map(([itemLabel, itemValue]) => `
-      <div>
-        <div class="label">${escapeHtml(itemLabel)}</div>
-        <div class="value ${secondLegTapValueClass(itemLabel, itemValue)}">${escapeHtml(itemValue)}</div>
+  return entries;
+}
+
+function renderMetric(entry) {
+  return `
+    <div class="metric${entry.defaultTracked ? ' metricTracked' : ''}" data-metric-priority="${escapeHtml(entry.priority)}" data-metric-family="${escapeHtml(entry.family)}" data-metric-composition="${escapeHtml(entry.composition)}" data-metric-default-tracked="${entry.defaultTracked ? 'true' : 'false'}">
+      <div class="metricLine">
+        <span class="metricLabel" title="${escapeHtml(entry.label)}">${escapeHtml(entry.label)}</span>
+        <span class="metricLeader" aria-hidden="true"></span>
+        <strong class="metricValue ${secondLegTapValueClass(entry.rawLabel, entry.value)}">${escapeHtml(entry.value)}</strong>
       </div>
-    `).join('')}
-  </div>`;
+    </div>
+  `;
+}
+
+function renderMetricGroupBody(entries) {
+  const hasFamilies = entries.some((entry) => entry.family);
+  if (!hasFamilies) {
+    return `<div class="metricGroupGrid">${entries.map(renderMetric).join('')}</div>`;
+  }
+
+  const families = new Map();
+  entries.forEach((entry) => {
+    const family = entry.family || 'Other';
+    if (!families.has(family)) families.set(family, []);
+    families.get(family).push(entry);
+  });
+  const orderedFamilies = [...families.entries()].sort(([familyA], [familyB]) => {
+    const indexA = MetricFamilyOrder.indexOf(familyA);
+    const indexB = MetricFamilyOrder.indexOf(familyB);
+    return (indexA < 0 ? 999 : indexA) - (indexB < 0 ? 999 : indexB);
+  });
+  return orderedFamilies.map(([family, familyEntries]) => `
+    <section class="metricFamily">
+      <header class="metricFamilyHeader">
+        <span aria-hidden="true"></span>
+        <strong>${escapeHtml(family)}</strong>
+        <span aria-hidden="true"></span>
+      </header>
+      <div class="metricGroupGrid">${familyEntries.map(renderMetric).join('')}</div>
+    </section>
+  `).join('');
 }
 
 function indexMs(index) {
@@ -10904,6 +11319,13 @@ controls.traceLibraryList.addEventListener('click', (event) => {
   }
   activateTrace(item.dataset.traceId);
 });
+metricsEl.addEventListener('toggle', (event) => {
+  const group = event.target.closest?.('.metricGroup');
+  const key = group?.dataset.metricGroupKey;
+  if (!key) return;
+  if (group.open) state.collapsedMetricGroups.delete(key);
+  else state.collapsedMetricGroups.add(key);
+}, true);
 controls.clearTraceLibrary.addEventListener('click', () => {
   state.resultLibrary = [];
   state.activeResultId = null;

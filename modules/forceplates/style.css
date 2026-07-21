@@ -425,7 +425,7 @@ main {
 
 .sessionMeasurePanel {
   display: none;
-  grid-template-rows: minmax(230px, 1fr) 6px var(--current-panel-height, 230px);
+  grid-template-rows: minmax(230px, 1fr) 6px var(--current-panel-height, 390px);
   gap: 10px;
   grid-row: 1;
   padding: 10px;
@@ -556,7 +556,7 @@ body.resizingMeasureVertical * {
 
 .sessionCurrentGrid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.55fr) repeat(4, minmax(90px, 1fr));
+  grid-template-columns: minmax(440px, 0.72fr) repeat(4, minmax(90px, 1fr));
   grid-template-rows: repeat(2, minmax(70px, 1fr));
   gap: 7px;
   height: calc(100% - 24px);
@@ -2224,43 +2224,113 @@ canvas.landmarkDragging {
 }
 
 .metrics {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: minmax(360px, 0.55fr) repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  height: 100%;
+  min-width: 0;
   min-height: 180px;
+  display: grid;
+  grid-template-columns: clamp(420px, 24vw, 480px) minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
 }
 
-.analyzeDisciplineCard {
-  grid-column: 1;
-  grid-row: 1;
+.analyzeIdentityRail {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
   background: var(--panel-2);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
-  padding: 8px;
+  overflow: hidden;
+}
+
+.metricGroupsViewport {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 4px 8px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.analyzeDisciplineCard {
+  background: var(--panel-3);
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 12px;
   min-height: 94px;
 }
 
-.analyzeDisciplineCard span {
+.analyzeDisciplineCard > span {
   display: block;
   color: var(--muted);
   font-size: 11px;
   text-transform: uppercase;
 }
 
-.analyzeDisciplineCard strong {
+.analyzeDisciplineCard > strong {
   display: block;
   margin-top: 3px;
   color: var(--text);
+  font-family: var(--jb-font-display);
   font-size: 30px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
   line-height: 1.05;
 }
 
-.analyzeDisciplineCard small {
+.analyzeDisciplineCard > small {
   display: block;
   margin-top: 8px;
   color: var(--accent);
   font-size: 12px;
+  font-weight: 700;
+}
+
+.disciplineContextParameter {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  margin-top: 8px;
+  color: var(--accent);
+}
+
+.disciplineContextParameter > span {
+  flex: 0 0 auto;
+  font-family: var(--jb-font-display);
+  font-size: 12px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
+}
+
+.disciplineContextParameter > i {
+  min-width: 12px;
+  flex: 1 1 auto;
+  height: .72em;
+  margin: 0 8px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 58%, transparent);
+}
+
+.disciplineContextParameter > b {
+  flex: 0 0 auto;
+  font-family: var(--jb-font-ui);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.disciplineContextParameter > b small {
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -2351,55 +2421,339 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
   text-align: right;
 }
 
-.analyzeAthleteCard {
-  grid-column: 1;
-  grid-row: 2;
+.athleteProfileCard {
+  --athlete-portrait-aspect: 1 / 1;
   align-self: stretch;
   width: 100%;
   min-height: 0;
-  grid-template-columns: 64px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: auto;
 }
 
-.analyzeAthleteCard .sessionAthletePortrait {
-  width: 56px;
-  height: 70px;
+.analyzeAthleteCard {
+  grid-row: auto;
 }
 
-.analyzeAthleteCard strong {
-  font-size: 22px;
-}
-
-.analyzeAthleteCard small {
-  margin-top: 5px;
-  font-size: 11px;
-}
-
-.metricGroup {
+.measureAthleteCard {
+  grid-row: 1 / 3;
   background: var(--panel-2);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
-  padding: 8px;
 }
 
-.metricGroup h3 {
-  margin: 0 0 8px;
+.athleteProfileTop {
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.athleteProfilePortraitFrame {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
+  min-width: 144px;
+  min-height: 144px;
+  aspect-ratio: var(--athlete-portrait-aspect);
+  overflow: hidden;
+  background: var(--panel-3);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.athleteProfilePortrait {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.athleteProfileDetails {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.athleteProfileNameLine,
+.athleteProfileField,
+.athleteRecordItem {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+}
+
+.athleteProfileNameLine {
+  min-height: 22px;
+  margin-bottom: 2px;
+}
+
+.athleteProfileName {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
   color: var(--text);
-  font-size: 12px;
+  font-family: var(--jb-font-display);
+  font-size: 18px;
+  font-size-adjust: var(--jb-font-display-adjust);
   font-weight: 700;
-  text-transform: uppercase;
+  letter-spacing: var(--jb-font-display-spacing);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.athleteProfileNameLine > i,
+.athleteProfileField > i,
+.athleteRecordItem > i {
+  min-width: 8px;
+  flex: 1 1 auto;
+  height: .72em;
+  margin: 0 6px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.athleteProfileNameLine > b {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.athleteProfileField {
+  min-height: 15px;
+}
+
+.athleteProfileField > span,
+.athleteRecordItem > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--jb-font-display);
+  font-size: 10px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
+  white-space: nowrap;
+}
+
+.athleteProfileField > strong,
+.athleteRecordItem > strong {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-family: var(--jb-font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.athleteProfileField > strong small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.athleteRecords {
+  min-width: 0;
+  padding-top: 2px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.athleteRecords > header {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.athleteRecords > header strong {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-family: var(--jb-font-display);
+  font-size: 13px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
+}
+
+.athleteRecords > header span {
+  flex: 1 1 auto;
+  border-top: 1px solid var(--line-soft);
+}
+
+.athleteRecordGrid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(5, 22px);
+  grid-auto-flow: row;
+  gap: 4px 10px;
+}
+
+.athleteRecordItem {
+  min-width: 0;
+  padding: 0 4px;
+  background: color-mix(in srgb, var(--panel-3) 64%, transparent);
+  border-radius: 2px;
+}
+
+.athleteRecordItem > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.athleteRecordItem > strong {
+  font-size: 10px;
+}
+
+.athleteRecordPlaceholder {
+  visibility: hidden;
+}
+
+.metricGroup {
+  flex: 0 0 auto;
+  padding: 0 0 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+}
+
+.metricGroup > summary {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.metricGroup > summary::-webkit-details-marker {
+  display: none;
+}
+
+.metricGroup > summary::before {
+  content: '▶';
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 9px;
+  transform-origin: center;
+  transition: transform 120ms ease;
+}
+
+.metricGroup[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.metricGroupTitle {
+  color: var(--text);
+  font-size: 15px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
+}
+
+.metricGroup > summary small {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--jb-font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricGroupBody {
+  padding: 8px 2px 0 10px;
+}
+
+.metricFamily + .metricFamily {
+  margin-top: 11px;
+}
+
+.metricFamilyHeader {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+
+.metricFamilyHeader strong {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: var(--jb-font-display);
+  font-size: 12px;
+  font-size-adjust: var(--jb-font-display-adjust);
+  font-weight: 700;
+  letter-spacing: var(--jb-font-display-spacing);
+  text-align: center;
+}
+
+.metricFamilyHeader > span {
+  min-width: 20px;
+  flex: 1 1 auto;
+  border-top: 1px solid color-mix(in srgb, var(--line-soft) 78%, transparent);
 }
 
 .metricGroupGrid {
+  --metric-card-height: 48px;
+  --metric-card-width: 400px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, var(--metric-card-width));
+  grid-auto-rows: var(--metric-card-height);
   gap: 8px;
+  justify-content: start;
 }
 
 .metric {
+  position: relative;
+  min-width: 0;
+  height: var(--metric-card-height, 48px);
+  display: flex;
+  align-items: center;
   background: var(--panel-3);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
-  padding: 8px;
+  padding: 0 12px;
+}
+
+.metric.metricTracked {
+  padding-left: 15px;
+}
+
+.metric.metricTracked::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+
+.metric.metricTracked .metricLabel {
+  color: var(--accent);
 }
 
 .metricSection {
@@ -2411,27 +2765,44 @@ canvas.balanceAnalyzeCanvas.balanceTimelineDragging {
   padding: 6px 2px 0;
 }
 
-.metric .label {
+.metricLine {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+}
+
+.metricLabel {
+  flex: 0 0 auto;
   color: var(--muted);
+  font-family: var(--jb-font-display);
   font-size: 12px;
-  text-transform: uppercase;
-}
-
-.metric .value {
-  font-size: 20px;
+  font-size-adjust: var(--jb-font-display-adjust);
   font-weight: 700;
-  margin-top: 2px;
+  letter-spacing: var(--jb-font-display-spacing);
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.metricSplit {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 10px;
+.metricLeader {
+  min-width: 14px;
+  flex: 1 1 28px;
+  align-self: baseline;
+  height: .72em;
+  margin: 0 9px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--muted) 48%, transparent);
 }
 
-.metricSplit > div + div {
-  border-left: 1px solid var(--line-soft);
-  padding-left: 10px;
+.metricValue {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-family: var(--jb-font-ui);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .landmarkDebug {

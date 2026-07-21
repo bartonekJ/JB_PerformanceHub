@@ -433,31 +433,36 @@
   }
 
   function collectMetricPairs(group) {
-    return [...group.querySelectorAll('.metric')].flatMap((metric) => (
-      [...metric.children].map((item) => {
-        const label = item.querySelector('.label')?.textContent.trim() || '';
-        const valueNode = item.querySelector('.value');
-        return {
-          label,
-          key: compactMetricKey(label),
-          value: valueNode?.textContent.trim() || '-',
-          valueClass: [...(valueNode?.classList || [])]
-            .filter((className) => className !== 'value')
-            .join(' '),
-        };
-      }).filter((pair) => pair.label)
-    ));
+    return [...group.querySelectorAll('.metric')].map((metric) => {
+      const label = metric.querySelector('.metricLabel, .label')?.textContent.trim() || '';
+      const valueNode = metric.querySelector('.metricValue, .value');
+      return {
+        label,
+        key: compactMetricKey(label),
+        value: valueNode?.textContent.trim() || '-',
+        valueClass: [...(valueNode?.classList || [])]
+          .filter((className) => className !== 'value' && className !== 'metricValue')
+          .join(' '),
+      };
+    }).filter((pair) => pair.label);
   }
 
   function renderMobileAnalyzeMetrics(metrics) {
     if (!metrics || metrics.querySelector(':scope > .mobileAnalyzeSummary')) return;
-    const disciplineCard = metrics.querySelector(':scope > .analyzeDisciplineCard');
-    const athleteCard = metrics.querySelector(':scope > .analyzeAthleteCard');
-    const rawGroups = [...metrics.querySelectorAll(':scope > .metricGroup')];
+    const identityRail = metrics.querySelector(':scope > .analyzeIdentityRail');
+    const disciplineCard = identityRail?.querySelector(':scope > .analyzeDisciplineCard')
+      || metrics.querySelector(':scope > .analyzeDisciplineCard');
+    const athleteCard = identityRail?.querySelector(':scope > .analyzeAthleteCard')
+      || metrics.querySelector(':scope > .analyzeAthleteCard');
+    const groupsViewport = metrics.querySelector(':scope > .metricGroupsViewport');
+    const rawGroups = [...(groupsViewport
+      ? groupsViewport.querySelectorAll(':scope > .metricGroup')
+      : metrics.querySelectorAll(':scope > .metricGroup'))];
     if (!disciplineCard && !athleteCard && !rawGroups.length) return;
 
     const groups = rawGroups.map((group, index) => ({
-      title: group.querySelector(':scope > h3')?.textContent.trim() || `Metrics ${index + 1}`,
+      title: group.querySelector(':scope > summary .metricGroupTitle, :scope > h3')?.textContent.trim()
+        || `Metrics ${index + 1}`,
       pairs: collectMetricPairs(group),
     }));
     const allPairs = groups.flatMap((group) => group.pairs);
@@ -472,7 +477,9 @@
     const primarySet = new Set(primary);
     const impulseGroup = groups.find((group) => compactMetricKey(group.title) === 'IMPULSEMOMENTUMHEIGHT');
     const discipline = disciplineCard?.querySelector('strong')?.textContent.trim() || '-';
-    const disciplineDetail = disciplineCard?.querySelector('small')?.textContent.trim() || '';
+    const disciplineDetail = disciplineCard
+      ?.querySelector(':scope > small, .disciplineContextParameter')
+      ?.textContent.trim().replace(/\s+/g, ' ') || '';
     const athlete = athleteCard?.querySelector('strong')?.textContent.trim() || 'No athlete';
     const method = impulseGroup?.title || groups[0]?.title || disciplineDetail || 'Metrics';
 

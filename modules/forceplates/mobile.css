@@ -599,11 +599,27 @@ html.fpMobileApp .metrics {
 html.fpMobileApp .metric,
 html.fpMobileApp .analyzeDisciplineCard {
   min-width: 0;
-  padding: 9px;
 }
 
-html.fpMobileApp .metric .value {
-  font-size: 19px;
+html.fpMobileApp .metric {
+  padding: 0 10px;
+}
+
+html.fpMobileApp .metricLabel {
+  font-size: 12px;
+}
+
+html.fpMobileApp .metricValue {
+  font-size: 15px;
+}
+
+html.fpMobileApp .metricLeader {
+  min-width: 9px;
+  margin-inline: 7px;
+}
+
+html.fpMobileApp .metricGroupGrid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 html.fpMobileApp body.fpMobileAnalyzeGraph .metrics {

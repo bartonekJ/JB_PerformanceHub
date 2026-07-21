@@ -1,0 +1,114 @@
+.hidden { display: none !important; }
+
+.ph-athlete-photo-editor {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--jb-color-line-soft);
+  border-left: 3px solid var(--jb-module-primary);
+  border-radius: var(--jb-radius-control);
+  background: var(--jb-color-bg-panel-2);
+}
+
+.ph-athlete-photo-editor > img {
+  width: 112px;
+  aspect-ratio: 1;
+  display: block;
+  object-fit: cover;
+  border: 2px solid var(--jb-module-primary);
+  border-radius: var(--jb-radius-control);
+  background: var(--jb-color-bg-panel-3);
+}
+
+.ph-athlete-photo-copy { min-width: 0; display: grid; gap: 6px; }
+.ph-athlete-photo-copy > strong { font-family: var(--jb-font-display); font-size: 16px; font-size-adjust: var(--jb-font-display-adjust); letter-spacing: var(--jb-font-display-spacing); }
+.ph-athlete-photo-copy > small { color: var(--jb-color-text-muted); }
+.ph-athlete-photo-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.ph-athlete-photo-actions button { min-width: 130px; }
+
+.ph-photo-modal {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .76);
+  backdrop-filter: blur(4px);
+}
+
+.ph-photo-dialog {
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--jb-color-line);
+  border-radius: var(--jb-radius-card);
+  background: var(--jb-color-bg-panel);
+  box-shadow: 0 24px 80px var(--jb-color-shadow);
+}
+
+.ph-photo-dialog > header,
+.ph-photo-dialog > footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--jb-color-bg-panel-2);
+}
+
+.ph-photo-dialog > header { justify-content: space-between; border-bottom: 1px solid var(--jb-color-line); }
+.ph-photo-dialog > footer { justify-content: flex-end; border-top: 1px solid var(--jb-color-line-soft); }
+.ph-photo-dialog > header small { color: var(--jb-module-primary); font-family: var(--jb-font-display); letter-spacing: var(--jb-font-display-spacing); }
+.ph-photo-dialog > header h2 { margin: 2px 0 0; font-family: var(--jb-font-display); font-size-adjust: var(--jb-font-display-adjust); letter-spacing: var(--jb-font-display-spacing); }
+.ph-photo-dialog > header > button { min-width: 38px; padding: 5px; font-size: 22px; }
+.ph-photo-dialog > footer button { min-width: 150px; }
+
+.ph-photo-dialog-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 512px) minmax(260px, 1fr);
+  gap: 18px;
+  padding: 18px;
+  overflow: auto;
+}
+
+.ph-photo-canvas-wrap { display: grid; gap: 8px; align-content: start; }
+.ph-photo-canvas-wrap canvas {
+  width: min(100%, 512px);
+  aspect-ratio: 1;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+  border: 2px solid var(--jb-module-primary);
+  border-radius: var(--jb-radius-control);
+  background: var(--jb-color-bg-panel-3);
+}
+.ph-photo-canvas-wrap canvas:active { cursor: grabbing; }
+.ph-photo-canvas-wrap > small { color: var(--jb-color-text-muted); }
+
+.ph-photo-controls { display: grid; gap: 13px; align-content: start; }
+.ph-photo-controls label,
+.ph-camera-tools label { display: grid; grid-template-columns: 1fr auto; gap: 6px; color: var(--jb-color-text-muted); font-family: var(--jb-font-display); font-size-adjust: var(--jb-font-display-adjust); letter-spacing: var(--jb-font-display-spacing); }
+.ph-photo-controls output { color: var(--jb-color-text); font-family: var(--jb-font-ui); }
+.ph-photo-controls input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--jb-module-primary); }
+.ph-photo-tip { padding: 10px; border-left: 3px solid var(--jb-module-primary); background: var(--jb-module-primary-soft); color: var(--jb-color-text-muted); }
+
+.ph-camera-dialog { width: min(920px, calc(100vw - 48px)); }
+.ph-camera-body { min-height: 0; display: grid; grid-template-columns: minmax(360px, 1fr) 260px; gap: 14px; padding: 14px; overflow: auto; }
+.ph-camera-body video { width: 100%; max-height: 65vh; display: block; object-fit: contain; border: 1px solid var(--jb-color-line-soft); background: #000; }
+.ph-camera-tools { display: grid; gap: 10px; align-content: start; }
+.ph-camera-tools label select { grid-column: 1 / -1; width: 100%; }
+.ph-camera-tools small { color: var(--jb-color-text-muted); }
+
+@media (max-width: 760px) {
+  .ph-photo-dialog-body,
+  .ph-camera-body { grid-template-columns: 1fr; }
+  .ph-photo-modal { padding: 8px; }
+  .ph-photo-dialog { width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+}
